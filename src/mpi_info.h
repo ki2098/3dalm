@@ -1,6 +1,6 @@
 #pragma once
 
-typedef struct {
+struct mpi_info {
     int size;
     int rank;
-} mpi_info;
+};

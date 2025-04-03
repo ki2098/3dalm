@@ -7,7 +7,19 @@ void run_pbicgstab(
     double x[],
     double b[],
     double r[],
+    double r0[],
+    double p[],
+    double q[],
+    double s[],
+    double p_hat[],
+    double s_hat[],
+    double t[],
+    double tmp[],
+    double &err,
+    double tolerance,
+    int &it,
+    int max_iteration,
     int sz[3],
     int gc,
-    mpi_info mpi
+    mpi_info *mpi
 );
