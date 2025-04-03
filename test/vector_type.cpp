@@ -10,7 +10,7 @@ struct vector_t {
     }
 }; */
 
-using int3_t = int[3];
+// using int3_t = int[3];
 
 inline int getid(int i, int j, int k, int size[3]) {
     return i*size[1]*size[2] + j*size[2] + k;
@@ -38,7 +38,7 @@ void foo(
 int main() {
     int sz[] = {5, 5, 5};
     int cnt = sz[0]*sz[1]*sz[2];
-    int (*data)[3] = new int[cnt][3];
+    auto data = new int[cnt][3];
 
     #pragma acc enter data create(data[:sz[0]*sz[1]*sz[2]])
 
