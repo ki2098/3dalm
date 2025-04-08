@@ -54,7 +54,6 @@ void calc_eddy_viscosity(
 
 double monitor_divergence(
     double U[][3],
-    double rhs[],
     double dx[],
     double dy[],
     double dz[],

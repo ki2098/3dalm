@@ -7,6 +7,9 @@ void cpy_array(
     double src[],
     int sz
 ) {
+    #pragma acc parallel loop independent \
+    present(dst[:sz], src[:sz]) \
+    firstprivate(sz)
     for (int i = 0; i < sz; i ++) {
         dst[i] = src[i];
     }
@@ -16,6 +19,9 @@ void clear_array(
     double dst[],
     int sz
 ) {
+    #pragma acc parallel loop independent \
+    present(dst[:sz]) \
+    firstprivate(sz)
     for (int i = 0; i < sz; i ++) {
         dst[i] = 0;
     }
@@ -27,7 +33,13 @@ double calc_norm(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
     double total = 0;
+
+    #pragma acc parallel loop independent reduction(+:total) collapse(3) \
+    present(x[:cnt]) \
+    firstprivate(sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -35,6 +47,7 @@ double calc_norm(
             }
         }
     }
+
     return sqrt(total);
 }
 
@@ -45,7 +58,13 @@ double calc_dot_product(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
     double total = 0;
+
+    #pragma acc parallel loop independent reduction(+:total) collapse(3) \
+    present(a[:cnt], b[:cnt]) \
+    firstprivate(sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -65,6 +84,11 @@ double calc_Ax(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
+    #pragma acc parallel loop independent collapse(3) \
+    present(A[:cnt], x[:cnt], y[:cnt]) \
+    firstprivate(sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -104,6 +128,11 @@ double calc_residual(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
+    #pragma acc parallel loop independent collapse(3) \
+    present(A[:cnt], x[:cnt], b[:cnt], r[:cnt]) \
+    firstprivate(sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {

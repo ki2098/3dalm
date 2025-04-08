@@ -1,6 +1,6 @@
-#pragma acc
+#pragma once
 
-#include <fstream>
+#include "mesh.h"
 
 /**
  * header format:
@@ -33,8 +33,9 @@ static void write_binary_file(
     out.write((char*)&step, sizeof(int));
     out.write((char*)&time, sizeof(double));
     for (int n = 0; n < vn; n ++) {
-        out.write((char*)&v[n], sz[0]*sz[1]*sz[2]*vd[n]*sizeof(double));
+        out.write((char*)v[n], (size_t)sz[0]*sz[1]*sz[2]*vd[n]*sizeof(double));
     }
+    out.close();
 }
 
 static void write_csv_file(
@@ -54,7 +55,7 @@ static void write_csv_file(
     for (int n = 0; n < vn; n ++) {
         for (int m = 0; m < vd[n]; m ++) {
             if (vd[n] > 1) {
-                out << "," << (vname[n] + ":" + std::to_string(m));
+                out << "," << (vname[n] + std::to_string(m));
             } else {
                 out << "," << vname[n];
             }
@@ -75,4 +76,5 @@ static void write_csv_file(
             }
         }
     }
+    out.close();
 }

@@ -16,6 +16,11 @@ void calc_pseudo_velocity(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
+    #pragma acc parallel loop independent collapse(3) \
+    present(U[:cnt], Utmp[:cnt], nut[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:dz[2]]) \
+    firstprivate(Re, dt, sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; j ++) {
@@ -88,6 +93,11 @@ void calc_poisson_rhs(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
+    #pragma acc parallel loop independent collapse(3) \
+    present(U[:cnt], rhs[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) \
+    firstprivate(dt, sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; j ++) {
@@ -120,6 +130,11 @@ void project_pressure(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
+    #pragma acc parallel loop independent collapse(3) \
+    present(p[:cnt], U[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) \
+    firstprivate(dt, sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; j ++) {
@@ -154,6 +169,11 @@ void calc_eddy_viscosity(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
+    #pragma acc parallel loop independent collapse(3) \
+    present(U[:cnt], nut[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) \
+    firstprivate(Cs, sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -197,7 +217,6 @@ void calc_eddy_viscosity(
 
 double monitor_divergence(
     double U[][3],
-    double rhs[],
     double dx[],
     double dy[],
     double dz[],
@@ -205,7 +224,13 @@ double monitor_divergence(
     int gc,
     mpi_info *mpi
 ) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
     double total = 0;
+
+    #pragma acc parallel loop independent reduction(+:total) collapse(3) \
+    present(U[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) \
+    firstprivate(sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -225,6 +250,7 @@ double monitor_divergence(
             }
         }
     }
+    
     int effective_cnt = (sz[0] - 2*gc)*(sz[1] - 2*gc)*(sz[2] - 2*gc);
     return sqrt(total/effective_cnt);
 }
