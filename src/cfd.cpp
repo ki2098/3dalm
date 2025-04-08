@@ -4,14 +4,14 @@
 #include "cfd_scheme.h"
 
 void calc_pseudo_velocity(
-    double u[][3],
-    double u_tmp[][3],
+    double U[][3],
+    double Utmp[][3],
     double nut[],
     double Re,
     double dt,
-    double transform_x[],
-    double transform_y[],
-    double transform_z[],
+    double dx[],
+    double dy[],
+    double dz[],
     int sz[3],
     int gc,
     mpi_info *mpi
@@ -33,44 +33,44 @@ void calc_pseudo_velocity(
                 int idb  = getid(i, j, k - 1, sz);
                 int idbb = getid(i, j, k - 2, sz);
 
-                double cell_transform[] = {transform_x[i], transform_y[j], transform_z[k]};
-                double diffusion_stencil_transform[] = {
-                    transform_x[i], transform_x[i + 1], transform_x[i - 1],
-                    transform_y[j], transform_y[j + 1], transform_y[j - 1],
-                    transform_z[k], transform_z[k + 1], transform_z[k - 1]
+                double dxyz[] = {dx[i], dy[j], dz[k]};
+                double diffusion_stencil_dxyz[] = {
+                    dx[i], dx[i + 1], dx[i - 1],
+                    dy[j], dy[j + 1], dy[j - 1],
+                    dz[k], dz[k + 1], dz[k - 1]
                 };
                 double viscosity = 1./Re + nut[idc];
 
                 for (int m = 0; m < 3; m ++) {
                     double convection_stencil[] = {
-                        u_tmp[idc ][m],
-                        u_tmp[ide ][m],
-                        u_tmp[idee][m],
-                        u_tmp[idw ][m],
-                        u_tmp[idww][m],
-                        u_tmp[idn ][m],
-                        u_tmp[idnn][m],
-                        u_tmp[ids ][m],
-                        u_tmp[idss][m],
-                        u_tmp[idt ][m],
-                        u_tmp[idtt][m],
-                        u_tmp[idb ][m],
-                        u_tmp[idbb][m]
+                        Utmp[idc ][m],
+                        Utmp[ide ][m],
+                        Utmp[idee][m],
+                        Utmp[idw ][m],
+                        Utmp[idww][m],
+                        Utmp[idn ][m],
+                        Utmp[idnn][m],
+                        Utmp[ids ][m],
+                        Utmp[idss][m],
+                        Utmp[idt ][m],
+                        Utmp[idtt][m],
+                        Utmp[idb ][m],
+                        Utmp[idbb][m]
                     };
-                    double convection = calc_convection_term(convection_stencil, u_tmp[idc], cell_transform);
+                    double convection = calc_convection_term(convection_stencil, Utmp[idc], dxyz);
 
                     double diffusion_stencil[] = {
-                        u_tmp[idc ][m],
-                        u_tmp[ide ][m],
-                        u_tmp[idw ][m],
-                        u_tmp[idn ][m],
-                        u_tmp[ids ][m],
-                        u_tmp[idt ][m],
-                        u_tmp[idb ][m]
+                        Utmp[idc ][m],
+                        Utmp[ide ][m],
+                        Utmp[idw ][m],
+                        Utmp[idn ][m],
+                        Utmp[ids ][m],
+                        Utmp[idt ][m],
+                        Utmp[idb ][m]
                     };
-                    double diffusion = calc_diffusion_term(diffusion_stencil, diffusion_stencil_transform, viscosity);
+                    double diffusion = calc_diffusion_term(diffusion_stencil, diffusion_stencil_dxyz, viscosity);
 
-                    u[idc][m] = u_tmp[idc][m] + dt*(- convection + diffusion);
+                    U[idc][m] = Utmp[idc][m] + dt*(- convection + diffusion);
                 }
             }
         }
@@ -78,12 +78,12 @@ void calc_pseudo_velocity(
 }
 
 void calc_poisson_rhs(
-    double u[][3],
+    double U[][3],
     double rhs[],
     double dt,
-    double transform_x[],
-    double transform_y[],
-    double transform_z[],
+    double dx[],
+    double dy[],
+    double dz[],
     int sz[3],
     int gc,
     mpi_info *mpi
@@ -100,9 +100,9 @@ void calc_poisson_rhs(
                 int idb = getid(i, j, k - 1, sz);
 
                 double divergence = 0;
-                divergence += 0.5*transform_x[i]*(u[ide][0] - u[idw][0]);
-                divergence += 0.5*transform_y[j]*(u[idn][1] - u[ids][1]);
-                divergence += 0.5*transform_z[k]*(u[idt][2] - u[idb][2]);
+                divergence += 0.5*(U[ide][0] - U[idw][0])/dx[i];
+                divergence += 0.5*(U[idn][1] - U[ids][1])/dy[j];
+                divergence += 0.5*(U[idt][2] - U[idb][2])/dz[k];
                 rhs[idc] = divergence/dt;
             }
         }
@@ -111,11 +111,11 @@ void calc_poisson_rhs(
 
 void project_pressure(
     double p[],
-    double u[][3],
+    double U[][3],
     double dt,
-    double transform_x[],
-    double transform_y[],
-    double transform_z[],
+    double dx[],
+    double dy[],
+    double dz[],
     int sz[3],
     int gc,
     mpi_info *mpi
@@ -131,25 +131,25 @@ void project_pressure(
                 int idt = getid(i, j, k + 1, sz);
                 int idb = getid(i, j, k - 1, sz);
 
-                double dpdx = 0.5*transform_x[i]*(p[ide] - p[idw]);
-                double dpdy = 0.5*transform_y[j]*(p[idn] - p[ids]);
-                double dpdz = 0.5*transform_z[k]*(p[idt] - p[idb]);
+                double dpdx = 0.5*(p[ide] - p[idw])/dx[i];
+                double dpdy = 0.5*(p[idn] - p[ids])/dy[j];
+                double dpdz = 0.5*(p[idt] - p[idb])/dz[k];
 
-                u[idc][0] -= dt*dpdx;
-                u[idc][1] -= dt*dpdy;
-                u[idc][2] -= dt*dpdz;
+                U[idc][0] -= dt*dpdx;
+                U[idc][1] -= dt*dpdy;
+                U[idc][2] -= dt*dpdz;
             }
         }
     }
 }
 
 void calc_eddy_viscosity(
-    double u[][3],
+    double U[][3],
     double nut[],
     double Cs,
-    double transform_x[],
-    double transform_y[],
-    double transform_z[],
+    double dx[],
+    double dy[],
+    double dz[],
     int sz[3],
     int gc,
     mpi_info *mpi
@@ -165,20 +165,20 @@ void calc_eddy_viscosity(
                 int idt = getid(i, j, k + 1, sz);
                 int idb = getid(i, j, k - 1, sz);
 
-                double tx = transform_x[i];
-                double ty = transform_y[j];
-                double tz = transform_z[k];
-                double volume = 1./(tx*ty*tz);
+                double dxc = dx[i];
+                double dyc = dy[j];
+                double dzc = dz[k];
+                double volume = dxc*dyc*dzc;
 
-                double dudx = 0.5*tx*(u[ide][0] - u[idw][0]);
-                double dudy = 0.5*ty*(u[idn][0] - u[ids][0]);
-                double dudz = 0.5*tz*(u[idt][0] - u[idb][0]);
-                double dvdx = 0.5*tx*(u[ide][1] - u[idw][1]);
-                double dvdy = 0.5*ty*(u[idn][1] - u[ids][1]);
-                double dvdz = 0.5*tz*(u[idt][1] - u[idb][1]);
-                double dwdx = 0.5*tx*(u[ide][2] - u[idw][2]);
-                double dwdy = 0.5*ty*(u[idn][2] - u[ids][2]);
-                double dwdz = 0.5*tz*(u[idt][2] - u[idb][2]);
+                double dudx = 0.5*(U[ide][0] - U[idw][0])/dxc;
+                double dudy = 0.5*(U[idn][0] - U[ids][0])/dyc;
+                double dudz = 0.5*(U[idt][0] - U[idb][0])/dzc;
+                double dvdx = 0.5*(U[ide][1] - U[idw][1])/dxc;
+                double dvdy = 0.5*(U[idn][1] - U[ids][1])/dyc;
+                double dvdz = 0.5*(U[idt][1] - U[idb][1])/dzc;
+                double dwdx = 0.5*(U[ide][2] - U[idw][2])/dxc;
+                double dwdy = 0.5*(U[idn][2] - U[ids][2])/dyc;
+                double dwdz = 0.5*(U[idt][2] - U[idb][2])/dzc;
 
                 double d1 = 2*square(dudx);
                 double d2 = 2*square(dvdy);
@@ -196,11 +196,11 @@ void calc_eddy_viscosity(
 }
 
 double monitor_divergence(
-    double u[][3],
+    double U[][3],
     double rhs[],
-    double transform_x[],
-    double transform_y[],
-    double transform_z[],
+    double dx[],
+    double dy[],
+    double dz[],
     int sz[3],
     int gc,
     mpi_info *mpi
@@ -218,9 +218,9 @@ double monitor_divergence(
                 int idb = getid(i, j, k - 1, sz);
 
                 double divergence = 0;
-                divergence += 0.5*transform_x[i]*(u[ide][0] - u[idw][0]);
-                divergence += 0.5*transform_y[j]*(u[idn][1] - u[ids][1]);
-                divergence += 0.5*transform_z[k]*(u[idt][2] - u[idb][2]);
+                divergence += 0.5*(U[ide][0] - U[idw][0])/dx[i];
+                divergence += 0.5*(U[idn][1] - U[ids][1])/dy[j];
+                divergence += 0.5*(U[idt][2] - U[idb][2])/dz[k];
                 total += divergence*divergence;
             }
         }
