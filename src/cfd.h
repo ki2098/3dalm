@@ -20,6 +20,7 @@ void calc_poisson_rhs(
     double U[][3],
     double rhs[],
     double dt,
+    double scale,
     double dx[],
     double dy[],
     double dz[],

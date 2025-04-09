@@ -86,6 +86,7 @@ void calc_poisson_rhs(
     double U[][3],
     double rhs[],
     double dt,
+    double scale,
     double dx[],
     double dy[],
     double dz[],
@@ -97,7 +98,7 @@ void calc_poisson_rhs(
 
     #pragma acc parallel loop independent collapse(3) \
     present(U[:cnt], rhs[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) \
-    firstprivate(dt, sz[:3], gc)
+    firstprivate(dt, scale, sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; j ++) {
@@ -113,7 +114,7 @@ void calc_poisson_rhs(
                 divergence += 0.5*(U[ide][0] - U[idw][0])/dx[i];
                 divergence += 0.5*(U[idn][1] - U[ids][1])/dy[j];
                 divergence += 0.5*(U[idt][2] - U[idb][2])/dz[k];
-                rhs[idc] = divergence/dt;
+                rhs[idc] = divergence/(dt*scale);
             }
         }
     }

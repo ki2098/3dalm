@@ -23,3 +23,13 @@ void run_pbicgstab(
     int gc,
     mpi_info *mpi
 );
+
+double build_coefficient_matrix(
+    double A[][7],
+    double dx[],
+    double dy[],
+    double dz[],
+    int sz[3],
+    int gc,
+    mpi_info *mpi
+);

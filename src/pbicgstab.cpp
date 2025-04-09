@@ -159,3 +159,86 @@ void run_pbicgstab(
         it ++;
     } while (it < max_iteration && err > tolerance);
 }
+
+double build_coefficient_matrix(
+    double A[][7],
+    double dx[],
+    double dy[],
+    double dz[],
+    int sz[3],
+    int gc,
+    mpi_info *mpi
+) {
+    int cnt = sz[0]*sz[1]*sz[2];
+
+    double max_diag = 0;
+
+    #pragma acc parallel loop independent reduction(max:max_diag) collapse(3) \
+    present(A[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) \
+    firstprivate(sz[:3], gc)
+    for (int i = gc; i < sz[0] - gc; i ++) {
+        for (int j = gc; j < sz[1] - gc; j ++) {
+            for (int k = gc; k < sz[2] - gc; k ++) {
+                double xxc = 1/dx[i];
+                double xxe = 1/dx[i + 1];
+                double xxw = 1/dx[i - 1];
+                double yyc = 1/dy[j];
+                double yyn = 1/dy[j + 1];
+                double yys = 1/dy[j - 1];
+                double zzc = 1/dz[k];
+                double zzt = 1/dz[k + 1];
+                double zzb = 1/dz[k - 1];
+                double ac = 0;
+                double ae = 0;
+                double aw = 0;
+                double an = 0;
+                double as = 0;
+                double at = 0;
+                double ab = 0;
+                if (i < sz[0] - gc) {
+                    double coefficient = xxc*(xxc + 0.25*(xxe - xxw));
+                    ae  = coefficient;
+                    ac -= coefficient;
+                }
+                if (i > gc) {
+                    double coefficient = xxc*(xxc - 0.25*(xxe - xxw));
+                    aw  = coefficient;
+                    ac -= coefficient;
+                }
+                if (j < sz[1] - gc - 1) {
+                    double coefficient = yyc*(yyc + 0.25*(yyn - yys));
+                    an  = coefficient;
+                    ac -= coefficient;
+                }
+                if (j > gc) {
+                    double coefficient = yyc*(yyc - 0.25*(yyn - yys));
+                    as  = coefficient;
+                    ac -= coefficient;
+                }
+                if (k < sz[2] - gc - 1) {
+                    double coefficient = zzc*(zzc + 0.25*(zzt - zzb));
+                    at  = coefficient;
+                    ac -= coefficient;
+                }
+                if (k > gc) {
+                    double coefficient = zzc*(zzc - 0.25*(zzt - zzb));
+                    ab  = coefficient;
+                    ac -= coefficient;
+                }
+                int id = getid(i, j, k, sz);
+                A[id][0] = ac;
+                A[id][1] = ae;
+                A[id][2] = aw;
+                A[id][3] = an;
+                A[id][4] = as;
+                A[id][5] = at;
+                A[id][6] = an;
+                if (fabs(ac) > max_diag) {
+                    max_diag = fabs(ac);
+                }
+            }
+        }
+    }
+
+    return max_diag;
+}
