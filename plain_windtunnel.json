@@ -1,0 +1,20 @@
+{
+    "runtime":{
+        "dt":1e-3,
+        "time":120
+    },
+
+    "mesh":{
+        "path":"mesh/20"
+    },
+
+    "cfd":{
+        "Re":2.5e5,
+        "Cs":0.1
+    },
+    
+    "ls":{
+        "tolerance":1e-3,
+        "max_iteration":1000
+    }
+}

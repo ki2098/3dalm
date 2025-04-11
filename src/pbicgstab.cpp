@@ -240,5 +240,14 @@ double build_coefficient_matrix(
         }
     }
 
+    #pragma acc parallel loop independent collapse(2) \
+    present(A[:cnt]) \
+    firstprivate(max_diag)
+    for (int i = 0; i < cnt; i ++) {
+        for (int m = 0; m < 7; m ++) {
+            A[i][m] /= max_diag;
+        }
+    }
+
     return max_diag;
 }
