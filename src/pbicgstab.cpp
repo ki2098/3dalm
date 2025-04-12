@@ -1,5 +1,7 @@
 #include <cmath>
 #include <cfloat>
+#include <cstdio>
+#include <iostream>
 #include "pbicgstab.h"
 #include "mv.h"
 #include "util.h"
@@ -232,7 +234,7 @@ double build_coefficient_matrix(
                 A[id][3] = an;
                 A[id][4] = as;
                 A[id][5] = at;
-                A[id][6] = an;
+                A[id][6] = ab;
                 if (fabs(ac) > max_diag) {
                     max_diag = fabs(ac);
                 }
@@ -242,7 +244,7 @@ double build_coefficient_matrix(
 
     #pragma acc parallel loop independent collapse(2) \
     present(A[:cnt]) \
-    firstprivate(max_diag)
+    firstprivate(max_diag, cnt)
     for (int i = 0; i < cnt; i ++) {
         for (int m = 0; m < 7; m ++) {
             A[i][m] /= max_diag;

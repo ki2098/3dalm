@@ -8,6 +8,10 @@
         "path":"mesh/20"
     },
 
+    "inflow":{
+        "value":[1, 0, 0]
+    },
+
     "cfd":{
         "Re":2.5e5,
         "Cs":0.1

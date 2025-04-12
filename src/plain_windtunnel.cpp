@@ -68,16 +68,20 @@ struct cfd_t {
     double (*U)[3];
     double (*Uprev)[3];
     double (*Utavg)[3];
+    double Uin[3];
     double *p;
     double *nut;
     double Re;
     double Cs;
     double divergence_monitor;
 
-    void init(double Re, double Cs, int sz[3]) {
+    void init(double Uin[3], double Re, double Cs, int sz[3]) {
         cout << "CFD INIT" << endl;
         this->Re = Re;
         this->Cs = Cs;
+        this->Uin[0] = Uin[0];
+        this->Uin[1] = Uin[1];
+        this->Uin[2] = Uin[2];
         int cnt = sz[0]*sz[1]*sz[2];
         U = new double[cnt][3];
         Uprev = new double[cnt][3];
@@ -90,6 +94,7 @@ struct cfd_t {
 
         cout << "\tRe " << this->Re << endl;
         cout << "\tCs " << this->Cs << endl;
+        cout << "\tUin (" << this->Uin[0] << " " << this->Uin[1] << " " << this->Uin[2] << ")" << endl;
     }
 
     void finalize(int sz[3]) {
@@ -120,6 +125,7 @@ struct ls_t {
     double tolerance;
     int iteration;
     int max_iteration;
+    double max_diag;
 
     void init(double tolerance, int max_iteration, int sz[3]) {
         cout << "LS INIT" << endl;
@@ -178,15 +184,47 @@ void init(string setup_path, runtime_t *runtime, mesh_t *mesh, cfd_t *cfd, ls_t 
     string mesh_path = mesh_json["path"];
     mesh->init(mesh_path, sz, GUIDE_CELL, mpi);
 
+    int cnt = sz[0]*sz[1]*sz[2];
+
     auto &cfd_json = setup_json["cfd"];
+    auto &inflow_json = setup_json["inflow"];
     double Re = cfd_json["Re"];
     double Cs = cfd_json["Cs"];
-    cfd->init(Re, Cs, sz);
+    double Uin[3];
+    Uin[0] = inflow_json["value"][0];
+    Uin[1] = inflow_json["value"][1];
+    Uin[2] = inflow_json["value"][2];
+    cfd->init(Uin, Re, Cs, sz);
+
+    fill_array(cfd->U, cfd->Uin, cnt);
+    fill_array(cfd->p, 0, cnt);
+    calc_eddy_viscosity(cfd->U, cfd->nut, cfd->Cs, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+    cfd->divergence_monitor = monitor_divergence(cfd->U, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+    cout << "initial divergence " << cfd->divergence_monitor << endl;
 
     auto &ls_json = setup_json["ls"];
     double tolerance = ls_json["tolerance"];
     int max_iteration = ls_json["max_iteration"];
     ls->init(tolerance, max_iteration, sz);
+
+    ls->max_diag = build_coefficient_matrix(ls->A, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+}
+
+void main_loop(runtime_t *runtime, mesh_t *mesh, cfd_t *cfd, ls_t *ls, mpi_info *mpi, int sz[3]) {
+    int cnt = sz[0]*sz[1]*sz[2];
+    cpy_array(cfd->Uprev, cfd->U, cnt);
+
+    calc_pseudo_velocity(cfd->U, cfd->Uprev, cfd->nut, cfd->Re, runtime->dt, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+
+    calc_poisson_rhs(cfd->U, ls->b, runtime->dt, ls->max_iteration, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+
+    run_pbicgstab(ls->A, cfd->p, ls->b, ls->r, ls->r0, ls->p, ls->q, ls->s, ls->phat, ls->shat, ls->t, ls->tmp, ls->err, ls->tolerance, ls->iteration, ls->max_iteration, sz, GUIDE_CELL, mpi);
+
+    apply_p_boundary_condition(cfd->p, cfd->Uprev, cfd->Re, cfd->nut, mesh->z, mesh->dz, sz, GUIDE_CELL, mpi);
+
+    project_pressure(cfd->p, cfd->U, runtime->dt, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+
+    apply_U_boundary_condition(cfd->U, cfd->Uprev, cfd->Uin, runtime->dt, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
 }
 
 void finalize(mesh_t *mesh, cfd_t *cfd, ls_t *ls, int sz[3]) {

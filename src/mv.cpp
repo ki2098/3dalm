@@ -27,6 +27,19 @@ void clear_array(
     }
 }
 
+void fill_array(
+    double dst[],
+    double value,
+    int sz
+) {
+    #pragma acc parallel loop independent \
+    present(dst[:sz]) \
+    firstprivate(value, sz)
+    for (int i = 0; i < sz; i ++) {
+        dst[i] = value;
+    }
+}
+
 double calc_norm(
     double x[],
     int sz[3],
@@ -76,7 +89,7 @@ double calc_dot_product(
     return total;
 }
 
-double calc_Ax(
+void calc_Ax(
     double A[][7],
     double x[],
     double y[],
@@ -119,7 +132,7 @@ double calc_Ax(
     }
 }
 
-double calc_residual(
+void calc_residual(
     double A[][7],
     double x[],
     double b[],

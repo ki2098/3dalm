@@ -44,6 +44,28 @@ void clear_array(
     }
 }
 
+void fill_array(
+    double dst[],
+    double value,
+    int sz
+);
+
+template<int N>
+void fill_array(
+    double dst[][N],
+    double value[N],
+    int sz
+) {
+    #pragma acc parallel loop independent \
+    present(dst[:sz]) \
+    firstprivate(value[:N], sz)
+    for (int i = 0; i < sz; i ++) {
+        for (int m = 0; m < N; m ++) {
+            dst[i][m] = value[m];
+        }
+    }
+}
+
 double calc_norm(
     double x[],
     int sz[3],
@@ -59,7 +81,7 @@ double calc_dot_product(
     mpi_info *mpi
 );
 
-double calc_Ax(
+void calc_Ax(
     double A[][7],
     double x[],
     double y[],
@@ -68,7 +90,7 @@ double calc_Ax(
     mpi_info *mpi
 );
 
-double calc_residual(
+void calc_residual(
     double A[][7],
     double x[],
     double b[],

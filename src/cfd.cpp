@@ -19,7 +19,7 @@ void calc_pseudo_velocity(
     int cnt = sz[0]*sz[1]*sz[2];
 
     #pragma acc parallel loop independent collapse(3) \
-    present(U[:cnt], Utmp[:cnt], nut[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:dz[2]]) \
+    present(U[:cnt], Utmp[:cnt], nut[:cnt], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) \
     firstprivate(Re, dt, sz[:3], gc)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
