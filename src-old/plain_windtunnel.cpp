@@ -26,6 +26,10 @@ struct runtime_t {
         cout << "\tdt " << this->dt << endl;
         cout << "\tmax step " << this->max_step << endl;
     }
+
+    double get_time() {
+        return step*dt;
+    }
 };
 
 struct mesh_t {
@@ -198,6 +202,8 @@ void init(string setup_path, runtime_t *runtime, mesh_t *mesh, cfd_t *cfd, ls_t 
 
     fill_array(cfd->U, cfd->Uin, cnt);
     fill_array(cfd->p, 0, cnt);
+    cpy_array(cfd->Uprev, cfd->U, cnt);
+    apply_U_boundary_condition(cfd->U, cfd->Uprev, cfd->Uin, runtime->dt, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
     calc_eddy_viscosity(cfd->U, cfd->nut, cfd->Cs, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
     cfd->divergence_monitor = monitor_divergence(cfd->U, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
     cout << "initial divergence " << cfd->divergence_monitor << endl;
@@ -208,6 +214,8 @@ void init(string setup_path, runtime_t *runtime, mesh_t *mesh, cfd_t *cfd, ls_t 
     ls->init(tolerance, max_iteration, sz);
 
     ls->max_diag = build_coefficient_matrix(ls->A, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+    cout << "max diag " << ls->max_diag << endl;
+
 }
 
 void main_loop(runtime_t *runtime, mesh_t *mesh, cfd_t *cfd, ls_t *ls, mpi_info *mpi, int sz[3]) {
@@ -218,13 +226,18 @@ void main_loop(runtime_t *runtime, mesh_t *mesh, cfd_t *cfd, ls_t *ls, mpi_info 
 
     calc_poisson_rhs(cfd->U, ls->b, runtime->dt, ls->max_iteration, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
 
-    run_pbicgstab(ls->A, cfd->p, ls->b, ls->r, ls->r0, ls->p, ls->q, ls->s, ls->phat, ls->shat, ls->t, ls->tmp, ls->err, ls->tolerance, ls->iteration, ls->max_iteration, sz, GUIDE_CELL, mpi);
+    // run_pbicgstab(ls->A, cfd->p, ls->b, ls->r, ls->r0, ls->p, ls->q, ls->s, ls->phat, ls->shat, ls->t, ls->tmp, ls->err, ls->tolerance, ls->iteration, ls->max_iteration, sz, GUIDE_CELL, mpi);
+    run_sor(ls->A, cfd->p, ls->b, ls->r, 1.2, ls->err, ls->tolerance, ls->iteration, ls->max_iteration, sz, GUIDE_CELL, mpi);
 
     apply_p_boundary_condition(cfd->p, cfd->Uprev, cfd->Re, cfd->nut, mesh->z, mesh->dz, sz, GUIDE_CELL, mpi);
 
     project_pressure(cfd->p, cfd->U, runtime->dt, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
 
     apply_U_boundary_condition(cfd->U, cfd->Uprev, cfd->Uin, runtime->dt, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+
+    cfd->divergence_monitor = monitor_divergence(cfd->U, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL, mpi);
+
+    output_mesh("data/mesh", mesh->x, mesh->y, mesh->z, mesh->dx, mesh->dy, mesh->dz, sz, GUIDE_CELL);
 }
 
 void finalize(mesh_t *mesh, cfd_t *cfd, ls_t *ls, int sz[3]) {
@@ -243,6 +256,21 @@ int main(int argc, char *argv[]) {
     mpi_info mpi;
 
     init(tom_path, &runtime, &mesh, &cfd, &ls, &mpi, sz);
+
+    double *var[] = {cfd.U[0], ls.phat, ls.r};
+    string var_name[] = {"U", "p", "r"};
+    int var_dim[] = {3, 1, 1};
+
+    for (runtime.step = 1; runtime.step <= 3; runtime.step ++) {
+        main_loop(&runtime, &mesh, &cfd, &ls, &mpi, sz);
+        printf("info: %10d %10e %5d %10e %10e\n", runtime.step, runtime.get_time(), ls.iteration, ls.err, cfd.divergence_monitor);
+        fflush(stdout);
+    }
+    printf("\n");
+
+    #pragma acc update self(cfd.U[:sz[0]*sz[1]*sz[2]], ls.phat[:sz[0]*sz[1]*sz[2]], ls.r[:sz[0]*sz[1]*sz[2]])
+
+    write_csv_file("data/test.csv", 3, var, var_dim, var_name, mesh.x, mesh.y, mesh.z, sz, GUIDE_CELL);
 
     finalize(&mesh, &cfd, &ls, sz);
 }

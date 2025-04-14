@@ -14,9 +14,9 @@ void cpy_array(
     double src[][N],
     int sz
 ) {
-    #pragma acc parallel loop independent \
-    present(dst[:sz], src[:sz]) \
-    firstprivate(sz)
+    #pragma acc data present(dst[:sz], src[:sz])
+    #pragma acc parallel firstprivate(sz)
+    #pragma acc loop independent
     for (int i = 0; i < sz; i ++) {
         for (int m = 0; m < N; m ++) {
             dst[i][m] = src[i][m];
@@ -34,9 +34,9 @@ void clear_array(
     double dst[][N],
     int sz
 ) {
-    #pragma acc parallel loop independent \
-    present(dst[:sz]) \
-    firstprivate(sz)
+    #pragma acc data present(dst[:sz])
+    #pragma acc parallel firstprivate(sz)
+    #pragma acc loop independent
     for (int i = 0; i < sz; i ++) {
         for (int m = 0; m < N; m ++) {
             dst[i][m] = 0;
@@ -56,9 +56,9 @@ void fill_array(
     double value[N],
     int sz
 ) {
-    #pragma acc parallel loop independent \
-    present(dst[:sz]) \
-    firstprivate(value[:N], sz)
+    #pragma acc data present(dst[:sz])
+    #pragma acc parallel firstprivate(value[:N], sz)
+    #pragma acc loop independent
     for (int i = 0; i < sz; i ++) {
         for (int m = 0; m < N; m ++) {
             dst[i][m] = value[m];

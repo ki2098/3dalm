@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cstdio>
 #include "mv.h"
 #include "util.h"
 
@@ -7,9 +8,9 @@ void cpy_array(
     double src[],
     int sz
 ) {
-    #pragma acc parallel loop independent \
-    present(dst[:sz], src[:sz]) \
-    firstprivate(sz)
+    #pragma acc data present(dst[:sz], src[:sz])
+    #pragma acc parallel firstprivate(sz)
+    #pragma acc loop independent
     for (int i = 0; i < sz; i ++) {
         dst[i] = src[i];
     }
@@ -19,9 +20,9 @@ void clear_array(
     double dst[],
     int sz
 ) {
-    #pragma acc parallel loop independent \
-    present(dst[:sz]) \
-    firstprivate(sz)
+    #pragma acc data present(dst[:sz])
+    #pragma acc parallel firstprivate(sz)
+    #pragma acc loop independent
     for (int i = 0; i < sz; i ++) {
         dst[i] = 0;
     }
@@ -32,9 +33,9 @@ void fill_array(
     double value,
     int sz
 ) {
-    #pragma acc parallel loop independent \
-    present(dst[:sz]) \
-    firstprivate(value, sz)
+    #pragma acc data present(dst[:sz])
+    #pragma acc parallel firstprivate(value, sz)
+    #pragma acc loop independent
     for (int i = 0; i < sz; i ++) {
         dst[i] = value;
     }
@@ -50,9 +51,9 @@ double calc_norm(
 
     double total = 0;
 
-    #pragma acc parallel loop independent reduction(+:total) collapse(3) \
-    present(x[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(x[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(3) reduction(+:total)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -75,9 +76,9 @@ double calc_dot_product(
 
     double total = 0;
 
-    #pragma acc parallel loop independent reduction(+:total) collapse(3) \
-    present(a[:cnt], b[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(a[:cnt], b[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(3) reduction(+:total)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -99,9 +100,12 @@ void calc_Ax(
 ) {
     int cnt = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel loop independent collapse(3) \
-    present(A[:cnt], x[:cnt], y[:cnt]) \
-    firstprivate(sz[:3], gc)
+    // #pragma acc parallel loop independent collapse(3) \
+    // present(A[:cnt], x[:cnt], y[:cnt]) \
+    // firstprivate(sz[:3], gc)
+    #pragma acc data present(A[:cnt], x[:cnt], y[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(3)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -143,9 +147,9 @@ void calc_residual(
 ) {
     int cnt = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel loop independent collapse(3) \
-    present(A[:cnt], x[:cnt], b[:cnt], r[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(A[:cnt], x[:cnt], b[:cnt], r[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(3)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
@@ -171,6 +175,7 @@ void calc_residual(
                 double xt = x[idt];
                 double xb = x[idb];
                 r[idc] = b[idc] - ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb;
+                // printf("%d %d %d -> %d = %e\n", i, j, k, idc, r[idc]);
             }
         }
     }

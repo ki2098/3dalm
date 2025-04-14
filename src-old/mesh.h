@@ -1,6 +1,7 @@
 #pragma once
 
-#include <string.h>
+#include <cstring>
+#include <string>
 #include <fstream>
 #include "mpi_info.h"
 
@@ -75,7 +76,7 @@ static void build_mesh_from_directory(
         y[j]  = y[j + 1] - 0.5*(dy[j] + dy[j + 1]);
     }
     for (int j = sz[1] - gc; j < sz[1]; j ++) {
-        dy[j] = 2*dy[j - 1] - dy[j - 1];
+        dy[j] = 2*dy[j - 1] - dy[j - 2];
         y[j]  = y[j - 1] + 0.5*(dy[j] + dy[j - 1]);
     }
 
@@ -91,4 +92,30 @@ static void build_mesh_from_directory(
         dz[k] = 2*dz[k - 1] - dz[k - 2];
         z[k]  = z[k - 1] + 0.5*(dz[k] + dz[k - 1]);
     }
+}
+
+static void output_mesh(
+    std::string path,
+    double *x,
+    double *y,
+    double *z,
+    double *dx,
+    double *dy,
+    double *dz,
+    int sz[3],
+    int gc
+) {
+    std::ofstream mesh_file(path);
+    mesh_file << sz[0] << " " << sz[1] << " " << sz[2] << " " << gc << std::endl;
+
+    for (int i = 0; i < sz[0]; i ++) {
+        mesh_file << x[i] << " " << dx[i] << std::endl;
+    }
+    for (int j = 0; j < sz[1]; j ++) {
+        mesh_file << y[j] << " " << dy[j] << std::endl;
+    }
+    for (int k = 0; k < sz[2]; k ++) {
+        mesh_file << z[k] << " " << dz[k] << std::endl;
+    }
+    mesh_file.close();
 }

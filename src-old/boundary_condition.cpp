@@ -16,44 +16,46 @@ void apply_U_boundary_condition(
     int cnt = sz[0]*sz[1]*sz[2];
 
     /** x-: inflow */
-    #pragma acc parallel loop independent collapse(3) \
-    present(U[:cnt]) \
-    firstprivate(Uin[:3], sz[:3], gc)
+    #pragma acc data present(U[:cnt])
+    #pragma acc parallel firstprivate(Uin[:3], sz[:3], gc)
+    #pragma acc loop independent collapse(3)
     for (int i = 0; i < gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
+                int id = getid(i, j, k, sz);
                 for (int m = 0; m < 3; m ++) {
-                    U[getid(i, j, k, sz)][m] = Uin[m];
+                    U[id][m] = Uin[m];
                 }
             }
         }
     }
 
     /** x+: convective outflow */
-    #pragma acc parallel loop independent collapse(3) \
-    present(U[:cnt], Uprev[:cnt], dx[:sz[0]]) \
-    firstprivate(dt, sz[:3], gc)
+    #pragma acc data present(U[:cnt], Uprev[:cnt], dx[:sz[0]])
+    #pragma acc parallel firstprivate(dt, sz[:3], gc)
+    #pragma acc loop independent collapse(3)
     for (int i = sz[0] - gc; i < sz[0]; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             for (int k = gc; k < sz[2] - gc; k ++) {
                 int idc  = getid(i    , j, k, sz);
                 int idw  = getid(i - 1, j, k, sz);
                 int idww = getid(i - 2, j, k, sz);
+                double u_out = Uprev[idc][0];
                 for (int m = 0; m < 3; m ++) {
                     double uc  = Uprev[idc ][m];
                     double uw  = Uprev[idw ][m];
                     double uww = Uprev[idww][m];
                     double gradient = 0.5*(3*uc - 4*uw + uww)/dx[i];
-                    U[idc][m] = uc - uc*dt*gradient;
+                    U[idc][m] = uc - u_out*dt*gradient;
                 }
             }
         }
     }
 
     /** y-:  slip */
-    #pragma acc parallel loop independent collapse(2) \
-    present(U[:cnt], dy[:sz[1]]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(U[:cnt], dy[:sz[1]])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int k = gc; k < sz[2] - gc; k ++) {
             int ji2  = gc + 1;
@@ -75,9 +77,9 @@ void apply_U_boundary_condition(
     }
 
     /** y+: slip */
-    #pragma acc parallel loop independent collapse(2) \
-    present(U[:cnt], dy[:sz[1]]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(U[:cnt], dy[:sz[1]])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int k = gc; k < sz[2] - gc; k ++) {
             int ji2  = sz[1] - gc - 2;
@@ -99,9 +101,9 @@ void apply_U_boundary_condition(
     }
 
     /** z-: non-slip */
-    #pragma acc parallel loop independent collapse(2) \
-    present(U[:cnt], dz[:sz[2]]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(U[:cnt], dz[:sz[2]])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             int ki2 = gc + 1;
@@ -123,9 +125,9 @@ void apply_U_boundary_condition(
     }
 
     /** z+: slip */
-    #pragma acc parallel loop independent collapse(2) \
-    present(U[:cnt], dz[:sz[2]]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(U[:cnt], dz[:sz[2]])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             int ki2 = sz[2] - gc - 2;
@@ -161,9 +163,9 @@ void apply_p_boundary_condition(
     int cnt = sz[0]*sz[1]*sz[2];
 
     /** x-: gradient = 0 */
-    #pragma acc parallel loop independent collapse(2) \
-    present(p[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(p[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int j = gc; j < sz[1] - gc; j ++) {
         for (int k = gc; k < sz[2] - gc; k ++) {
             p[getid(gc - 1, j, k, sz)] = p[getid(gc, j, k, sz)];
@@ -171,9 +173,9 @@ void apply_p_boundary_condition(
     }
 
     /** x+: fixed value = 0 */
-    #pragma acc parallel loop independent collapse(2) \
-    present(p[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(p[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int j = gc; j < sz[1] - gc; j ++) {
         for (int k = gc; k < sz[2] - gc; k ++) {
             p[getid(sz[0] - gc, j, k, sz)] = 0 - p[getid(sz[0] - gc - 1, j, k, sz)];
@@ -181,9 +183,9 @@ void apply_p_boundary_condition(
     }
 
     /** y-: gradient = 0 */
-    #pragma acc parallel loop independent collapse(2) \
-    present(p[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(p[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int k = gc; k < sz[2] - gc; k ++) {
             p[getid(i, gc - 1, k, sz)] = p[getid(i, gc, k, sz)];
@@ -191,9 +193,9 @@ void apply_p_boundary_condition(
     }
 
     /** y+: gradient = 0 */
-    #pragma acc parallel loop independent collapse(2) \
-    present(p[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(p[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int k = gc; k < sz[2] - gc; k ++) {
             p[getid(i, sz[1] - gc, k, sz)] = p[getid(i, sz[1] - gc - 1, k, sz)];
@@ -201,9 +203,9 @@ void apply_p_boundary_condition(
     }
 
     /** z-: wall function dp/dz = (1/Re + nut)*(d2w/dz2) */
-    #pragma acc parallel loop independent collapse(2) \
-    present(p[:cnt], U[:cnt], nut[:cnt], z[:sz[2]], dz[:sz[2]]) \
-    firstprivate(Re, sz[:3], gc)
+    #pragma acc data present(p[:cnt], U[:cnt], nut[:cnt], z[:sz[2]], dz[:sz[2]])
+    #pragma acc parallel firstprivate(Re, sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             int ktt = gc + 1;
@@ -228,9 +230,9 @@ void apply_p_boundary_condition(
     }
 
     /** z+: gradient = 0 */
-    #pragma acc parallel loop independent collapse(2) \
-    present(p[:cnt]) \
-    firstprivate(sz[:3], gc)
+    #pragma acc data present(p[:cnt])
+    #pragma acc parallel firstprivate(sz[:3], gc)
+    #pragma acc loop independent collapse(2)
     for (int i = gc; i < sz[0] - gc; i ++) {
         for (int j = gc; j < sz[1] - gc; j ++) {
             p[getid(i, j, sz[2] - gc, sz)] = p[getid(i, j, sz[2] - gc - 1, sz)];

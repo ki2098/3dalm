@@ -2,6 +2,21 @@
 
 #include "mpi_info.h"
 
+void run_sor(
+    double A[][7],
+    double x[],
+    double b[],
+    double r[],
+    double omega,
+    double &err,
+    double tolerance,
+    int &it,
+    int max_iteration,
+    int sz[3],
+    int gc,
+    mpi_info *mpi
+);
+
 void run_pbicgstab(
     double A[][7],
     double x[],
