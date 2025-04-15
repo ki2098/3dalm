@@ -17,8 +17,8 @@
         "Cs":0.1
     },
     
-    "ls":{
-        "tolerance":1e-3,
-        "max_iteration":1000
+    "eq":{
+        "maxError":1e-3,
+        "maxIteration":1000
     }
 }
