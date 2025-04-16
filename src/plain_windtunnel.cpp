@@ -8,9 +8,9 @@ using namespace std;
 using json = nlohmann::json;
 
 Real calcConvection(
-    Real13 stencil,
-    Real3 U,
-    Real3 D
+    Real stencil[13],
+    Real U[3],
+    Real D[3]
 ) {
     Real valC  = stencil[0];
     Real valE  = stencil[1];
@@ -43,9 +43,9 @@ Real calcConvection(
 }
 
 Real calcDiffusion(
-    Real7 stencil,
-    Real9 X,
-    Real3 D,
+    Real stencil[7],
+    Real X[9],
+    Real D[3],
     Real viscosity
 ) {
     Real valC = stencil[0];
@@ -77,8 +77,8 @@ Real calcDiffusion(
 }
 
 void calcPseudoU(
-    Real3 U[],
-    Real3 UPrev[],
+    Real U[][3],
+    Real UPrev[][3],
     Real nut[],
     Real Re,
     Real dt,
@@ -88,7 +88,7 @@ void calcPseudoU(
     Real dx[],
     Real dy[],
     Real dz[],
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -109,8 +109,8 @@ void calcPseudoU(
         Int idB  = getId(i, j, k - 1, sz);
         Int idBb = getId(i, j, k - 2, sz);
 
-        Real3 D = {dx[i], dy[j], sz[k]};
-        Real9 XStencil = {
+        Real D[] = {dx[i], dy[j], dz[k]};
+        Real XStencil[] = {
             x[i], x[i + 1], x[i - 1],
             y[j], y[j + 1], y[j - 1],
             z[k], z[k + 1], z[k - 1]
@@ -118,7 +118,7 @@ void calcPseudoU(
         Real viscosity = 1/Re + nut[idC];
 
         for (Int m = 0; m < 3; m ++) {
-            Real13 convectionStencil = {
+            Real convectionStencil[] = {
                 UPrev[idC ][m],
                 UPrev[idE ][m],
                 UPrev[idEe][m],
@@ -135,7 +135,7 @@ void calcPseudoU(
             };
             Real convection = calcConvection(convectionStencil, UPrev[idC], D);
 
-            Real7 diffusionStencil = {
+            Real diffusionStencil[] = {
                 UPrev[idC ][m],
                 UPrev[idE ][m],
                 UPrev[idW ][m],
@@ -152,14 +152,14 @@ void calcPseudoU(
 }
 
 void calcPoissonRhs(
-    Real3 U[],
+    Real U[][3],
     Real rhs[],
     Real dt,
     Real scale,
     Real x[],
     Real y[],
     Real z[],
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -183,12 +183,12 @@ void calcPoissonRhs(
 
 void projectP(
     Real p[],
-    Real3 U[],
+    Real U[][3],
     Real dt,
     Real x[],
     Real y[],
     Real z[],
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -210,7 +210,7 @@ void projectP(
 }
 
 void calcNut(
-    Real3 U[],
+    Real U[][3],
     Real nut[],
     Real Cs,
     Real x[],
@@ -219,7 +219,7 @@ void calcNut(
     Real dx[],
     Real dy[],
     Real dz[],
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -262,12 +262,12 @@ void calcNut(
 }
 
 void calcDivergence(
-    Real3 U[],
+    Real U[][3],
     Real div[],
     Real x[],
     Real y[],
     Real z[],
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -302,11 +302,11 @@ Real calcL2Norm(
 }
 
 void calcResidual(
-    Real7 A[],
+    Real A[][7],
     Real x[],
     Real b[],
     Real r[],
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -342,12 +342,12 @@ void calcResidual(
 }
 
 void sweepSor(
-    Real7 A[],
+    Real A[][7],
     Real x[],
     Real b[],
     Real relaxRate,
     Int color,
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -385,7 +385,7 @@ void sweepSor(
 }
 
 void runSor(
-    Real7 A[],
+    Real A[][7],
     Real x[],
     Real b[],
     Real r[],
@@ -394,7 +394,7 @@ void runSor(
     Int maxIt,
     Real &err,
     Real maxErr,
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -411,14 +411,14 @@ void runSor(
 }
 
 Real prepareA(
-    Real7 A[],
+    Real A[][7],
     Real x[],
     Real y[],
     Real z[],
     Real dx[],
     Real dy[],
     Real dz[],
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
@@ -444,7 +444,7 @@ Real prepareA(
         Real aS = 1/(dyC*dyCS);
         Real aT = 1/(dzC*dzTC);
         Real aB = 1/(dzC*dzCB);
-        Real aC = - (aE + aW + aN * aS + aT *aB);
+        Real aC = - (aE + aW + aN + aS + aT + aB);
         A[id][0] = aC;
         A[id][1] = aE;
         A[id][2] = aW;
@@ -453,7 +453,7 @@ Real prepareA(
         A[id][5] = aT;
         A[id][6] = aB;
         if (fabs(aC) > maxDiag) {
-            maxDiag = aC;
+            maxDiag = fabs(aC);
         }
     }}}
 
@@ -466,162 +466,6 @@ Real prepareA(
     return maxDiag;
 }
 
-void applyUBc(
-    Real3 U[],
-    Real3 UPrev[],
-    Real3 UIn,
-    Real dt,
-    Real x[],
-    Real y[],
-    Real z[],
-    Real dx[],
-    Real dy[],
-    Real dz[],
-    Int3 sz,
-    Int gc,
-    MpiInfo *mpi
-) {
-    /** x- fixed value inflow */
-    for (Int i = 0 ; i < gc        ; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int idC  = getId(i    , j, k, sz);
-        for (Int m = 0; m < 3; m ++) {
-            U[idC][m] = UIn[m];
-        }
-    }}}
-
-    /** x+ convective outflow */
-    for (Int i = sz[0] - gc; i < sz[0]     ; i ++) {
-    for (Int j = gc        ; j < sz[1] - gc; j ++) {
-    for (Int k = gc        ; k < sz[2] - gc; k ++) {
-        Int id0 = getId(i    , j, k, sz);
-        Int id1 = getId(i - 1, j, k, sz);
-        Int id2 = getId(i - 2, j, k, sz);
-        Real d1 = x[i] - x[i - 1];
-        Real d2 = x[i] - x[i - 2];
-        Real uOut = UPrev[id0][0];
-        for (Int m = 0; m < 3; m ++) {
-            Real val0 = UPrev[id0][m];
-            Real val1 = UPrev[id1][m];
-            Real val2 = UPrev[id2][m];
-            Real gradient = (val0*(d2*d2 - d1*d1) - val1*(d2*d2) + val2*(d1*d1))/(d1*d2*d2 - d2*d1*d1);
-            U[id0][m] = val0 - uOut*dt*gradient;
-        }
-    }}}
-
-    /** y- slip */
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int jI  = gc;
-        Int jIi = gc + 1;
-        Int jO  = gc - 1;
-        Int jOo = gc - 2;
-        Int idI  = getId(i, jI , k, sz);
-        Int idIi = getId(i, jIi, k, sz);
-        Int idO  = getId(i, jO , k, sz);
-        Int idOo = getId(i, jOo, k, sz);
-        Real3 UB = {U[idI][1], 0, U[idI][2]};
-        Real dBI  = 0.5*dy[jI ];
-        Real dBIi = 0.5*dy[jIi] + dy[jI];
-        Real dBO  = 0.5*dy[jO ];
-        Real dBOo = 0.5*dy[jOo] + dy[jO];
-        for (Int m = 0; m < 3; m ++) {
-            U[idO ][m] = UB[m] - dBO *(U[idI ][m] - UB[m])/dBI ;
-            U[idOo][m] = UB[m] - dBOo*(U[idIi][m] - UB[m])/dBIi;
-        }
-    }}
-
-    /** y+ slip */
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int jI  = sz[1] - gc - 1;
-        Int jIi = sz[1] - gc - 2;
-        Int jO  = sz[1] - gc;
-        Int jOo = sz[1] - gc + 1;
-        Int idI  = getId(i, jI , k, sz);
-        Int idIi = getId(i, jIi, k, sz);
-        Int idO  = getId(i, jO , k, sz);
-        Int idOo = getId(i, jOo, k, sz);
-        Real3 UB = {U[idI][1], 0, U[idI][2]};
-        Real dBI  = 0.5*dy[jI ];
-        Real dBIi = 0.5*dy[jIi] + dy[jI];
-        Real dBO  = 0.5*dy[jO ];
-        Real dBOo = 0.5*dy[jOo] + dy[jO];
-        for (Int m = 0; m < 3; m ++) {
-            U[idO ][m] = UB[m] - dBO *(U[idI ][m] - UB[m])/dBI ;
-            U[idOo][m] = UB[m] - dBOo*(U[idIi][m] - UB[m])/dBIi;
-        }
-    }}
-
-    /** z- no slip */
-    for (Int i = 0; i < sz[0] - gc; i ++) {
-    for (Int j = 0; j < sz[1] - gc; j ++) {
-        Int kI  = gc;
-        Int kIi = gc + 1;
-        Int kO  = gc - 1;
-        Int kOo = gc - 2;
-        Int idI  = getId(i, j, kI , sz);
-        Int idIi = getId(i, j, kIi, sz);
-        Int idO  = getId(i, j, kO , sz);
-        Int idOo = getId(i, j, kOo, sz);
-        Real3 UB = {0, 0, 0};
-        Real dBI  = 0.5*dz[kI ];
-        Real dBIi = 0.5*dz[kIi] + dy[kI];
-        Real dBO  = 0.5*dz[kO ];
-        Real dBOo = 0.5*dz[kOo] + dy[kO];
-        for (Int m = 0; m < 3; m ++) {
-            U[idO ][m] = UB[m] - dBO *(U[idI ][m] - UB[m])/dBI ;
-            U[idOo][m] = UB[m] - dBOo*(U[idIi][m] - UB[m])/dBIi;
-        }
-    }}
-
-    /** z+ slip */
-    for (Int i = 0; i < sz[0] - gc; i ++) {
-    for (Int j = 0; j < sz[1] - gc; j ++) {
-        Int kI  = sz[2] - gc - 1;
-        Int kIi = sz[2] - gc - 2;
-        Int kO  = sz[2] - gc;
-        Int kOo = sz[2] - gc + 1;
-        Int idI  = getId(i, j, kI , sz);
-        Int idIi = getId(i, j, kIi, sz);
-        Int idO  = getId(i, j, kO , sz);
-        Int idOo = getId(i, j, kOo, sz);
-        Real3 UB = {U[idI][0], U[idI][1], 0};
-        Real dBI  = 0.5*dz[kI ];
-        Real dBIi = 0.5*dz[kIi] + dy[kI];
-        Real dBO  = 0.5*dz[kO ];
-        Real dBOo = 0.5*dz[kOo] + dy[kO];
-        for (Int m = 0; m < 3; m ++) {
-            U[idO ][m] = UB[m] - dBO *(U[idI ][m] - UB[m])/dBI ;
-            U[idOo][m] = UB[m] - dBOo*(U[idIi][m] - UB[m])/dBIi;
-        }
-    }}
-}
-
-void applyPBc(
-    Real p[],
-    Real dx[],
-    Int3 sz,
-    Int gc,
-    MpiInfo *mpi
-) {
-    /** x- gradient = 0 */
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        p[getId(gc - 1, j, k, sz)] = p[getId(gc, j, k, sz)];
-    }}
-
-    /** x+ fixed value = 0 */
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int iI = sz[0] - gc - 1;
-        Int iO = sz[0] - gc;
-        Real pB = 0;
-        p[getId(iO, j, k, sz)] = pB - dx[iO]*(p[getId(iI, j, k, sz)]- pB)/dx[iI];
-    }}
-}
-
 struct Runtime {
     Int step = 0, maxStep;
     Real dt;
@@ -631,8 +475,8 @@ struct Runtime {
         this->dt = dt;
 
         printf("RUNTIME INFO\n");
-        printf("\tdt = %e\n", dt);
-        printf("\tmax step = %d\n", maxStep);
+        printf("\tdt = %e\n", this->dt);
+        printf("\tmax step = %d\n", this->maxStep);
     }
 
     Real getTime() {
@@ -643,7 +487,7 @@ struct Runtime {
 struct Mesh {
     Real *x, *y, *z, *dx, *dy, *dz;
 
-    void initialize(string path, Int3 sz, Int gc, MpiInfo *mpi) {
+    void initialize(string path, Int sz[3], Int gc, MpiInfo *mpi) {
         buildMeshFromDir(path, x, y, z, dx, dy, dz, sz, gc, mpi);
 
         printf("MESH INFO\n");
@@ -652,7 +496,7 @@ struct Mesh {
         printf("\tguide cell = %d\n", gc);
     }
 
-    void finalize(Int3 sz) {
+    void finalize(Int sz[3]) {
         delete[] x;
         delete[] y;
         delete[] z;
@@ -664,30 +508,30 @@ struct Mesh {
 
 struct Cfd {
     Real Re, Cs;
-    Real3 UIn;
-    Real3 *U, *UPrev;
+    Real UIn[3];
+    Real (*U)[3], (*UPrev)[3];
     Real *p, *nut;
 
-    void initialize(Real Re, Real Cs, Real3 UIn, Int3 sz) {
+    void initialize(Real Re, Real Cs, Real UIn[3], Int sz[3]) {
         this->Re = Re;
         this->Cs = Cs;
         this->UIn[0] = UIn[0];
         this->UIn[1] = UIn[1];
         this->UIn[2] = UIn[2];
         Int cnt = sz[0]*sz[1]*sz[2];
-        U = new Real3[cnt];
-        UPrev = new Real3[cnt];
+        U = new Real[cnt][3];
+        UPrev = new Real[cnt][3];
         p = new Real[cnt];
         nut = new Real[cnt];
 
         printf("CFD INFO\n");
-        printf("\tRe = %e\n", Re);
-        printf("\tCs = %e\n", Cs);
+        printf("\tRe = %e\n", this->Re);
+        printf("\tCs = %e\n", this->Cs);
         printf("INFLOW INFO\n");
-        printf("\tinflow U = (%lf %lf %lf)\n", UIn[0], UIn[1], UIn[2]);
+        printf("\tinflow U = (%lf %lf %lf)\n", this->UIn[0], this->UIn[1], this->UIn[2]);
     }
 
-    void finalize(Int3 sz) {
+    void finalize(Int sz[3]) {
         delete[] U;
         delete[] UPrev;
         delete[] p;
@@ -698,23 +542,24 @@ struct Cfd {
 struct Eq {
     Int it = 0, maxIt;
     Real err = 0, maxErr;
-    Real7 *A;
+    Real maxDiag;
+    Real (*A)[7];
     Real *b, *r;
 
-    void initialize(Int maxIt, Real maxErr, Int3 sz) {
+    void initialize(Int maxIt, Real maxErr, Int sz[3]) {
         this->maxIt = maxIt;
         this->maxErr = maxErr;
         Int cnt = sz[0]*sz[1]*sz[2];
-        A = new Real7[cnt];
+        A = new Real[cnt][7];
         b = new Real[cnt];
         r = new Real[cnt];
 
         printf("EQ INFO\n");
-        printf("\tmax iteration = %d\n", maxIt);
-        printf("\tmax error = %e\n", maxErr);
+        printf("\tmax iteration = %d\n", this->maxIt);
+        printf("\tmax error = %e\n", this->maxErr);
     }
 
-    void finalize(Int3 sz) {
+    void finalize(Int sz[3]) {
         delete[] A;
         delete[] b;
         delete[] r;
@@ -722,7 +567,7 @@ struct Eq {
 };
 
 struct Solver {
-    Int3 sz;
+    Int sz[3];
     Int gc = 2;
 
     MpiInfo mpi;
@@ -750,7 +595,7 @@ struct Solver {
         auto &inflowJson = setupJson["inflow"];
         Real Cs = cfdJson["Cs"];
         Real Re = cfdJson["Re"];
-        Real3 UIn;
+        Real UIn[3];
         UIn[0] = inflowJson["value"][0];
         UIn[1] = inflowJson["value"][1];
         UIn[2] = inflowJson["value"][2];
@@ -760,6 +605,9 @@ struct Solver {
         Real maxErr = eqJson["maxError"];
         Int maxIt = eqJson["maxIteration"];
         eq.initialize(maxIt, maxErr, sz);
+
+        eq.maxDiag = prepareA(eq.A, mesh.x, mesh.y, mesh.z, mesh.dx, mesh.dy, mesh.dz, sz, gc, &mpi);
+        printf("max A diag = %lf\n", eq.maxDiag);
 
         printf("SOLVER INITIALIZED\n");
     }
@@ -777,4 +625,3 @@ int main(int argc, char *argv[]) {
     solver.initialize(setupPath);
     solver.finalize();
 }
-

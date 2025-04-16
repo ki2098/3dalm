@@ -1,80 +1,121 @@
 #pragma once
 
-#include "mesh.h"
+#include <fstream>
+#include <iostream>
+#include <cstdio>
+#include "type.h"
 
-/**
- * header format:
- * int      sz[0]
- * int      sz[1]
- * int      sz[2]
- * int      gc
- * int      vn
- * int      vd[0]
- * ...
- * int      vd[vn-1]
- * int      step
- * double   time
- */
-static void write_binary_file(
+static void buildMeshFromDir(
     std::string path,
-    int vn,
-    double *v[],
-    int vd[],
-    int step,
-    double time,
-    int sz[3],
-    int gc
+    Real *&x,
+    Real *&y,
+    Real *&z,
+    Real *&dx,
+    Real *&dy,
+    Real *&dz,
+    Int sz[3],
+    Int gc,
+    MpiInfo *mpi
 ) {
-    std::ofstream out(path, std::ios::binary);
-    out.write((char*)sz, sizeof(int)*3);
-    out.write((char*)&gc, sizeof(int));
-    out.write((char*)&vn, sizeof(int));
-    out.write((char*)vd, sizeof(int)*vn);
-    out.write((char*)&step, sizeof(int));
-    out.write((char*)&time, sizeof(double));
-    for (int n = 0; n < vn; n ++) {
-        out.write((char*)v[n], (size_t)sz[0]*sz[1]*sz[2]*vd[n]*sizeof(double));
+    std::ifstream coordFile;
+    Int nodeSz[3];
+
+    coordFile.open(path + "/x.txt");
+    coordFile >> nodeSz[0];
+    double *nodeX = new double[nodeSz[0]];
+    for (int i = 0; i < nodeSz[0]; i ++) {
+        coordFile >> nodeX[i];
     }
-    out.close();
+    coordFile.close();
+
+    coordFile.open(path + "/y.txt");
+    coordFile >> nodeSz[1];
+    double *nodeY = new double[nodeSz[1]];
+    for (int j = 0; j < nodeSz[1]; j ++) {
+        coordFile >> nodeY[j];
+    }
+    coordFile.close();
+
+    coordFile.open(path + "/z.txt");
+    coordFile >> nodeSz[2];
+    double *nodeZ = new double[nodeSz[2]];
+    for (int k = 0; k < nodeSz[2]; k ++) {
+        coordFile >> nodeZ[k];
+    }
+    coordFile.close();
+
+    sz[0] = nodeSz[0] - 1 + 2*gc;
+    sz[1] = nodeSz[1] - 1 + 2*gc;
+    sz[2] = nodeSz[2] - 1 + 2*gc;
+    x  = new double[sz[0]];
+    dx = new double[sz[0]];
+    y  = new double[sz[1]];
+    dy = new double[sz[1]];
+    z  = new double[sz[2]];
+    dz = new double[sz[2]];
+
+    for (int i = gc; i < sz[0] - gc; i ++) {
+        dx[i] = nodeX[i - gc + 1] - nodeX[i - gc];
+        x[i]  = nodeX[i - gc] + 0.5*dx[i];
+    }
+    for (int i = gc - 1; i >= 0; i --) {
+        dx[i] = 2*dx[i + 1] - dx[i + 2];
+        x[i]  = x[i + 1] - 0.5*(dx[i] + dx[i + 1]);
+    }
+    for (int i = sz[0] - gc; i < sz[0]; i ++) {
+        dx[i] = 2*dx[i - 1] - dx[i - 2];
+        x[i]  = x[i - 1] + 0.5*(dx[i] + dx[i - 1]);
+    }
+
+    for (int j = gc; j < sz[1] - gc; j ++) {
+        dy[j] = nodeY[j - gc + 1] - nodeY[j - gc];
+        y[j]  = nodeY[j - gc] + 0.5*dy[j];
+    }
+    for (int j = gc - 1; j >= 0; j --) {
+        dy[j] = 2*dy[j + 1] - dy[j + 2];
+        y[j]  = y[j + 1] - 0.5*(dy[j] + dy[j + 1]);
+    }
+    for (int j = sz[1] - gc; j < sz[1]; j ++) {
+        dy[j] = 2*dy[j - 1] - dy[j - 2];
+        y[j]  = y[j - 1] + 0.5*(dy[j] + dy[j - 1]);
+    }
+
+    for (int k = gc; k < sz[2] - gc; k ++) {
+        dz[k] = nodeZ[k - gc + 1] - nodeZ[k - gc];
+        z[k]  = nodeZ[k - gc] + 0.5*dz[k];
+    }
+    for (int k = gc - 1; k >= 0; k --) {
+        dz[k] = 2*dz[k + 1] - dz[k + 2];
+        z[k]  = z[k + 1] - 0.5*(dz[k] + dz[k + 1]);
+    }
+    for (int k = sz[2] - gc; k < sz[2]; k ++) {
+        dz[k] = 2*dz[k - 1] - dz[k - 2];
+        z[k]  = z[k - 1] + 0.5*(dz[k] + dz[k - 1]);
+    }
 }
 
-static void write_csv_file(
+static void writeMesh(
     std::string path,
-    int vn,
-    double *v[],
-    int *vd,
-    std::string vname[],
-    double x[],
-    double y[],
-    double z[],
-    int sz[3],
-    int gc
+    Real *x,
+    Real *y,
+    Real *z,
+    Real *dx,
+    Real *dy,
+    Real *dz,
+    Int sz[3],
+    Int gc
 ) {
-    std::ofstream out(path);
-    out << "x,y,z";
-    for (int n = 0; n < vn; n ++) {
-        for (int m = 0; m < vd[n]; m ++) {
-            if (vd[n] > 1) {
-                out << "," << (vname[n] + std::to_string(m));
-            } else {
-                out << "," << vname[n];
-            }
-            
-        }
+    std::ofstream meshFile(path);
+    meshFile << sz[0] << " " << sz[1] << " " << sz[2] << " " << gc << std::endl;
+
+    for (int i = 0; i < sz[0]; i ++) {
+        meshFile << x[i] << " " << dx[i] << std::endl;
     }
-    out << std::endl;
+    for (int j = 0; j < sz[1]; j ++) {
+        meshFile << y[j] << " " << dy[j] << std::endl;
+    }
     for (int k = 0; k < sz[2]; k ++) {
-        for (int j = 0; j < sz[1]; j ++) {
-            for (int i = 0; i < sz[0]; i ++) {
-                out << x[i] << "," << y[j] << "," << z[k];
-                for (int n = 0; n < vn; n ++) {
-                    for (int m = 0; m < vd[n]; m ++) {
-                        out << "," << v[n][i*sz[1]*sz[2]*vd[n] + j*sz[2]*vd[n] + k*vd[n] + m];
-                    }
-                }
-                out << std::endl;
-            }
-        }
+        meshFile << z[k] << " " << dz[k] << std::endl;
     }
-    out.close();
+    meshFile.close();
 }

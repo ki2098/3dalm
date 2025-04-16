@@ -13,12 +13,12 @@ static void buildMeshFromDir(
     Real *&dx,
     Real *&dy,
     Real *&dz,
-    Int3 sz,
+    Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
     std::ifstream coordFile;
-    Int3 nodeSz;
+    Int nodeSz[3];
 
     coordFile.open(path + "/x.txt");
     coordFile >> nodeSz[0];
@@ -102,7 +102,7 @@ static void writeMesh(
     Real *dx,
     Real *dy,
     Real *dz,
-    Int3 sz,
+    Int sz[3],
     Int gc
 ) {
     std::ofstream meshFile(path);
