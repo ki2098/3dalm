@@ -1,9 +1,12 @@
 #pragma once
 
+#pragma once
+
 #include <fstream>
 #include <iostream>
 #include <cstdio>
 #include "type.h"
+#include "util.h"
 
 static void buildMeshFromDir(
     std::string path,
@@ -13,12 +16,12 @@ static void buildMeshFromDir(
     Real *&dx,
     Real *&dy,
     Real *&dz,
-    Int sz[3],
+    Int3 &sz,
     Int gc,
     MpiInfo *mpi
 ) {
     std::ifstream coordFile;
-    Int nodeSz[3];
+    Int3 nodeSz;
 
     coordFile.open(path + "/x.txt");
     coordFile >> nodeSz[0];
@@ -102,7 +105,7 @@ static void writeMesh(
     Real *dx,
     Real *dy,
     Real *dz,
-    Int sz[3],
+    Int3 sz,
     Int gc
 ) {
     std::ofstream meshFile(path);
@@ -118,4 +121,46 @@ static void writeMesh(
         meshFile << z[k] << " " << dz[k] << std::endl;
     }
     meshFile.close();
+}
+
+static void writeCsv(
+    std::string path,
+    Real *var[],
+    Int varCount,
+    Int *varDim,
+    std::string varName[],
+    Real x[],
+    Real y[],
+    Real z[],
+    Int3 sz,
+    Int gc
+) {
+    std::ofstream oCsv(path);
+
+    oCsv << "x,y,z";
+    for (Int n = 0; n < varCount; n ++) {
+        if (varDim[n] > 1) {
+            for (Int m = 0; m < varDim[n]; m ++) {
+                oCsv << "," << varName[n] + std::to_string(m);
+            }
+        } else {
+            oCsv << "," << varName[n];
+        }
+    }
+    oCsv << std::endl;
+
+    for (Int k = 0; k < sz[2]; k ++) {
+    for (Int j = 0; j < sz[1]; j ++) {
+    for (Int i = 0; i < sz[0]; i ++) {
+        oCsv << x[i] << "," << y[j] << "," << z[k];
+        for (Int n = 0; n < varCount; n ++) {
+            for (Int m = 0; m < varDim[n]; m ++) {
+                Int id = getId(i, j, k, sz)*varDim[n] + m;
+                oCsv << "," << var[n][id];
+            }
+        }
+        oCsv << std::endl;
+    }}}
+
+    oCsv.close();
 }

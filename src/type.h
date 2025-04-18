@@ -23,3 +23,7 @@ using Real3 = Vector<Real, 3>;
 using Real7 = Vector<Real, 7>;
 using Real9 = Vector<Real, 9>;
 using Real13 = Vector<Real, 13>;
+
+struct MpiInfo {
+    int rank, size;
+};

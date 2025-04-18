@@ -2,7 +2,7 @@
 
 #include "type.h"
 
-static Int getId(Int i, Int j, Int k, Int sz[3]) {
+static Int getId(Int i, Int j, Int k, const Int sz[3]) {
     return i*sz[1]*sz[2] + j*sz[2] + k;
 }
 

@@ -94,8 +94,8 @@ void calcPseudoU(
 ) {
     Int len = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel present(U[:len], UPrev[:len], nut[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) firstprivate(sz[:3], gc, Re, dt)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(U[:len], UPrev[:len], nut[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) firstprivate(sz[:3], gc, Re, dt)
+#pragma acc loop independent collapse(3)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -169,8 +169,8 @@ void calcPoissonRhs(
 ) {
     Int len = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel present(U[:len], rhs[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]]) firstprivate(sz[:3], gc, dt, scale)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(U[:len], rhs[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]]) firstprivate(sz[:3], gc, dt, scale)
+#pragma acc loop independent collapse(3)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -202,8 +202,8 @@ void projectP(
 ) {
     Int len = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel present(p[:len], U[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]]) firstprivate(sz[:3], gc, dt)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(p[:len], U[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]]) firstprivate(sz[:3], gc, dt)
+#pragma acc loop independent collapse(3)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -237,8 +237,8 @@ void calcNut(
 ) {
     Int len = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel present(U[:len], nut[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) firstprivate(sz[:3], gc, Cs)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(U[:len], nut[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) firstprivate(sz[:3], gc, Cs)
+#pragma acc loop independent collapse(3)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -283,14 +283,14 @@ void calcDivergence(
     Real x[],
     Real y[],
     Real z[],
-    Int sz[3],
+    const Int sz[3],
     Int gc,
     MpiInfo *mpi
 ) {
     Int len = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel present(U[:len], div[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel firstprivate(sz[:3], gc) present(U[:len], div[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]])
+#pragma acc loop independent collapse(3)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -307,9 +307,9 @@ void calcDivergence(
         divergence += (U[idN][1] - U[idS][1])/(y[j + 1] - y[j - 1]);
         divergence += (U[idT][2] - U[idB][2])/(z[k + 1] - z[k - 1]);
         div[idC] = divergence;
-        if (fabs(divergence) > 1e-3) {
-            printf("%d %d %d %e\n", i, j, k, divergence);
-        }
+        // if (fabs(divergence) > 1e-3) {
+        //     printf("%ld %ld %ld %e %e %e %e %e %e %e\n", i, j, k, U[idE][0], U[idW][0], U[idN][1], U[idS][1], U[idT][2], U[idB][2], divergence);
+        // }
     }}}
 }
 
@@ -321,8 +321,8 @@ Real calcL2Norm(
     Int len = sz[0]*sz[1]*sz[2];
     Real total = 0;
 
-    #pragma acc parallel present(v[:len]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(3) reduction(+:total)
+#pragma acc parallel present(v[:len]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(3) reduction(+:total)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -342,8 +342,8 @@ void calcResidual(
 ) {
     Int len = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel present(A[:len], x[:len], b[:len], r[:len]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(A[:len], x[:len], b[:len], r[:len]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(3)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -387,8 +387,8 @@ void sweepSor(
 ) {
     Int len = sz[0]*sz[1]*sz[2];
 
-    #pragma acc parallel present(A[:len], x[:len], b[:len]) firstprivate(relaxRate, color, sz[:3], gc)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(A[:len], x[:len], b[:len]) firstprivate(relaxRate, color, sz[:3], gc)
+#pragma acc loop independent collapse(3)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -462,8 +462,8 @@ Real prepareA(
     Int len = sz[0]*sz[1]*sz[2]; 
     Real maxDiag = 0;
 
-    #pragma acc parallel present(A[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(3) reduction(max:maxDiag)
+#pragma acc parallel present(A[:len], x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(3) reduction(max:maxDiag)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -496,8 +496,8 @@ Real prepareA(
         }
     }}}
 
-    #pragma acc parallel present(A[:len]) firstprivate(maxDiag, len)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(A[:len]) firstprivate(maxDiag, len)
+#pragma acc loop independent collapse(2)
     for (Int i = 0; i < len; i ++) {
         for (Int m = 0; m < 7; m ++) {
             A[i][m] /= maxDiag;
@@ -522,8 +522,8 @@ void applyUbc(
     Int len = sz[0]*sz[1]*sz[2]; 
 
     /** x- fixed value inflow */
-    #pragma acc parallel present(U[:len]) firstprivate(UIn[:3], sz[:3], gc)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(U[:len]) copyin(UIn[:3]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(3)
     for (Int i = 0 ; i < gc        ; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -534,8 +534,8 @@ void applyUbc(
     }}}
 
     /** x+ convective outflow */
-    #pragma acc parallel present(U[:len], UPrev[:len], x[:sz[0]]) firstprivate(sz[:3], gc, dt)
-    #pragma acc loop independent collapse(3)
+#pragma acc parallel present(U[:len], UPrev[:len], x[:sz[0]]) firstprivate(sz[:3], gc, dt)
+#pragma acc loop independent collapse(3)
     for (Int i = sz[0] - gc; i < sz[0]     ; i ++) {
     for (Int j = gc        ; j < sz[1] - gc; j ++) {
     for (Int k = gc        ; k < sz[2] - gc; k ++) {
@@ -555,8 +555,8 @@ void applyUbc(
     }}}
 
     /** y- slip */
-    #pragma acc parallel present(U[:len], dy[:sz[1]]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(U[:len], dy[:sz[1]]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
         Int jI1 = gc;
@@ -579,8 +579,8 @@ void applyUbc(
     }}
 
     /** y+ slip */
-    #pragma acc parallel present(U[:len], dy[:sz[1]]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(U[:len], dy[:sz[1]]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
         Int jI1 = sz[1] - gc - 1;
@@ -603,8 +603,8 @@ void applyUbc(
     }}
 
     /** z- no slip U=0 */
-    #pragma acc parallel present(U[:len], dz[:sz[2]]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(U[:len], dz[:sz[2]]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
         Int kI1 = gc;
@@ -627,8 +627,8 @@ void applyUbc(
     }}
 
     /** z+ slip */
-    #pragma acc parallel present(U[:len], dz[:sz[2]]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(U[:len], dz[:sz[2]]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
         Int kI1 = sz[2] - gc - 1;
@@ -661,8 +661,8 @@ void applyPBc(
     Int len = sz[0]*sz[1]*sz[2];
 
     /** x- gradient = 0 */
-    #pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
         Int iI = gc;
@@ -671,8 +671,8 @@ void applyPBc(
     }}
 
     /** x+ fixed value = 0 */
-    #pragma acc parallel present(p[:len], dx[:sz[0]]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(p[:len], dx[:sz[0]]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
         Int iI = sz[0] - gc - 1;
@@ -684,8 +684,8 @@ void applyPBc(
     }}
 
     /** y- gradient = 0 */
-    #pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
         Int jI = gc;
@@ -694,8 +694,8 @@ void applyPBc(
     }}
 
     /** y+ gradient = 0 */
-    #pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
         Int jI = sz[1] - gc - 1;
@@ -704,8 +704,8 @@ void applyPBc(
     }}
 
     /** z- gradient = 0 */
-    #pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
         Int kI = gc;
@@ -714,8 +714,8 @@ void applyPBc(
     }}
 
     /** z+ gradient = 0 */
-    #pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
-    #pragma acc loop independent collapse(2)
+#pragma acc parallel present(p[:len]) firstprivate(sz[:3], gc)
+#pragma acc loop independent collapse(2)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
         Int kI = sz[2] - gc - 1;
@@ -753,7 +753,7 @@ struct Mesh {
         printf("\tsize = (%d %d %d)\n", sz[0], sz[1], sz[2]);
         printf("\tguide cell = %d\n", gc);
 
-        #pragma acc enter data copyin(x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]])
+#pragma acc enter data copyin(x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]])
     }
 
     void finalize(Int sz[3]) {
@@ -764,7 +764,7 @@ struct Mesh {
         delete[] dy;
         delete[] dz;
 
-        #pragma acc exit data delete(x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]])
+#pragma acc exit data delete(x[:sz[0]], y[:sz[1]], z[:sz[2]], dx[:sz[0]], dy[:sz[1]], dz[:sz[2]])
     }
 };
 
@@ -794,7 +794,7 @@ struct Cfd {
         printf("INFLOW INFO\n");
         printf("\tinflow U = (%lf %lf %lf)\n", this->UIn[0], this->UIn[1], this->UIn[2]);
 
-        #pragma acc enter data create(U[:len], UPrev[:len], p[:len], nut[:len], div[:len])
+#pragma acc enter data create(U[:len], UPrev[:len], p[:len], nut[:len], div[:len])
     }
 
     void finalize(Int sz[3]) {
@@ -805,7 +805,7 @@ struct Cfd {
         delete[] div;
 
         Int len = sz[0]*sz[1]*sz[2];
-        #pragma acc exit data delete(U[:len], UPrev[:len], p[:len], nut[:len], div[:len])
+#pragma acc exit data delete(U[:len], UPrev[:len], p[:len], nut[:len], div[:len])
     }
 };
 
@@ -830,7 +830,7 @@ struct Eq {
         printf("\tmax error = %e\n", this->maxErr);
         printf("\trelax rate = %lf\n", this->relaxRate);
 
-        #pragma acc enter data create(A[:len], b[:len], r[:len])
+#pragma acc enter data create(A[:len], b[:len], r[:len])
     }
 
     void finalize(Int sz[3]) {
@@ -839,7 +839,7 @@ struct Eq {
         delete[] r;
 
         Int len = sz[0]*sz[1]*sz[2];
-        #pragma acc exit data delete(A[:len], b[:len], r[:len])
+#pragma acc exit data delete(A[:len], b[:len], r[:len])
     }
 };
 
@@ -1060,7 +1060,7 @@ int main(int argc, char *argv[]) {
     Solver solver;
     string setupPath(argv[1]);
     solver.initialize(setupPath);
-    // Int len = solver.sz[0]*solver.sz[1]*solver.sz[2];
+    Int len = solver.sz[0]*solver.sz[1]*solver.sz[2];
 
     writeMesh(
         "data/mesh.txt",
@@ -1070,6 +1070,27 @@ int main(int argc, char *argv[]) {
         solver.mesh.dx,
         solver.mesh.dy,
         solver.mesh.dz,
+        solver.sz,
+        solver.gc
+    );
+
+    for (; solver.rt.step < 1000;) {
+        solver.main_loop();
+    }
+
+#pragma acc update host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
+    Real *var[] = {solver.cfd.U[0], solver.cfd.p, solver.cfd.div};
+    Int varDim[] = {3, 1, 1};
+    string varName[] = {"U", "p", "div"};
+    writeCsv(
+        "data/plain_windtunnel.csv",
+        var,
+        3,
+        varDim,
+        varName,
+        solver.mesh.x,
+        solver.mesh.y,
+        solver.mesh.z,
         solver.sz,
         solver.gc
     );
