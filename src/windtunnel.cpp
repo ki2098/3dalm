@@ -7,26 +7,27 @@
 using namespace std;
 using json = nlohmann::json;
 
-Real calcConvectionKK(Real13 stencil, Real3 U, Real3 cellSz) {
-    Real valc0 = stencil[0];
-    Real vale1 = stencil[1];
-    Real vale2 = stencil[2];
-    Real valw1 = stencil[3];
-    Real valw2 = stencil[4];
-    Real valn1 = stencil[5];
-    Real valn2 = stencil[6];
-    Real vals1 = stencil[7];
-    Real vals2 = stencil[8];
-    Real valt1 = stencil[9];
-    Real valt2 = stencil[10];
-    Real valb1 = stencil[11];
-    Real valb2 = stencil[12];
-    Real u = U[0];
-    Real v = U[1];
-    Real w = U[2];
-    Real dx = cellSz[0];
-    Real dy = cellSz[1];
-    Real dz = cellSz[2];
+Real calcConvectionKK(
+    Real valc0,
+    Real vale1,
+    Real vale2,
+    Real valw1,
+    Real valw2,
+    Real valn1,
+    Real valn2,
+    Real vals1,
+    Real vals2,
+    Real valt1,
+    Real valt2,
+    Real valb1,
+    Real valb2,
+    Real u,
+    Real v,
+    Real w,
+    Real dx,
+    Real dy,
+    Real dz
+) {
     const Real a = 0.25;
 
     Real convection = 0;
@@ -43,27 +44,28 @@ Real calcConvectionKK(Real13 stencil, Real3 U, Real3 cellSz) {
     return convection;
 }
 
-Real calcDiffusion(Real7 stencil, Real9 coord, Real3 cellSz, Real viscosity) {
-    Real valc = stencil[0];
-    Real vale = stencil[1];
-    Real valw = stencil[2];
-    Real valn = stencil[3];
-    Real vals = stencil[4];
-    Real valt = stencil[5];
-    Real valb = stencil[6];
-    Real xc = coord[0];
-    Real xe = coord[1];
-    Real xw = coord[2];
-    Real yc = coord[3];
-    Real yn = coord[4];
-    Real ys = coord[5];
-    Real zc = coord[6];
-    Real zt = coord[7];
-    Real zb = coord[8];
-    Real dx = cellSz[0];
-    Real dy = cellSz[1];
-    Real dz = cellSz[2];
-
+Real calcDiffusion(
+    Real valc,
+    Real vale,
+    Real valw,
+    Real valn,
+    Real vals,
+    Real valt,
+    Real valb,
+    Real xc,
+    Real xe,
+    Real xw,
+    Real yc,
+    Real yn,
+    Real ys,
+    Real zc,
+    Real zt,
+    Real zb,
+    Real dx,
+    Real dy,
+    Real dz,
+    Real viscosity
+) {
     Real diffusion = 0;
 
     diffusion += ((vale - valc)/(xe - xc) - (valc - valw)/(xc - xw))/dx;
@@ -78,176 +80,202 @@ Real calcDiffusion(Real7 stencil, Real9 coord, Real3 cellSz, Real viscosity) {
 }
 
 void calcPseudoU(
-    Real3 U[],
-    Real3 UPrev[],
-    Real nut[],
+    Real *U,
+    Real *Uprev,
+    Real *nut,
+    Real *x,
+    Real *y,
+    Real *z,
+    Real *dx,
+    Real *dy,
+    Real *dz,
     Real Re,
     Real dt,
-    Real x[],
-    Real y[],
-    Real z[],
-    Real dx[],
-    Real dy[],
-    Real dz[],
-    Int3 sz,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int idc0 = getId(i, j, k, sz);
-        Int ide1 = getId(i + 1, j, k, sz);
-        Int ide2 = getId(i + 2, j, k, sz);
-        Int idw1 = getId(i - 1, j, k, sz);
-        Int idw2 = getId(i - 2, j, k, sz);
-        Int idn1 = getId(i, j + 1, k, sz);
-        Int idn2 = getId(i, j + 2, k, sz);
-        Int ids1 = getId(i, j - 1, k, sz);
-        Int ids2 = getId(i, j - 2, k, sz);
-        Int idt1 = getId(i, j, k + 1, sz);
-        Int idt2 = getId(i, j, k + 2, sz);
-        Int idb1 = getId(i, j, k - 1, sz);
-        Int idb2 = getId(i, j, k - 2, sz);
+    Int len = cx*cy*cz;
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
+        Int idc0 = getId(i, j, k, cx, cy, cz);
+        Int ide1 = getId(i + 1, j, k, cx, cy, cz);
+        Int ide2 = getId(i + 2, j, k, cx, cy, cz);
+        Int idw1 = getId(i - 1, j, k, cx, cy, cz);
+        Int idw2 = getId(i - 2, j, k, cx, cy, cz);
+        Int idn1 = getId(i, j + 1, k, cx, cy, cz);
+        Int idn2 = getId(i, j + 2, k, cx, cy, cz);
+        Int ids1 = getId(i, j - 1, k, cx, cy, cz);
+        Int ids2 = getId(i, j - 2, k, cx, cy, cz);
+        Int idt1 = getId(i, j, k + 1, cx, cy, cz);
+        Int idt2 = getId(i, j, k + 2, cx, cy, cz);
+        Int idb1 = getId(i, j, k - 1, cx, cy, cz);
+        Int idb2 = getId(i, j, k - 2, cx, cy, cz);
 
-        Real3 cellSz = {dx[i], dy[j], dz[k]};
-        Real9 coordStencil = {
-            x[i], x[i + 1], x[i - 1],
-            y[j], y[j + 1], y[j - 1],
-            z[k], z[k + 1], z[k - 1]
-        };
         Real viscosity = 1/Re + nut[idc0];
+        Real dxc = dx[i], dyc = dy[j], dzc = dz[k];
+        Real xc = x[i], xe = x[i + 1], xw = x[i - 1];
+        Real yc = y[j], yn = y[j + 1], ys = y[j - 1];
+        Real zc = z[k], zt = z[k + 1], zb = z[k - 1];
+        Real u = (Uprev + 0*len)[idc0];
+        Real v = (Uprev + 1*len)[idc0];
+        Real w = (Uprev + 2*len)[idc0];
 
         for (Int m = 0; m < 3; m ++) {
-            Real13 convectionStencil = {
-                UPrev[idc0][m],
-                UPrev[ide1][m],
-                UPrev[ide2][m],
-                UPrev[idw1][m],
-                UPrev[idw2][m],
-                UPrev[idn1][m],
-                UPrev[idn2][m],
-                UPrev[ids1][m],
-                UPrev[ids2][m],
-                UPrev[idt1][m],
-                UPrev[idt2][m],
-                UPrev[idb1][m],
-                UPrev[idb2][m]
-            };
-            Real convection = calcConvectionKK(convectionStencil, UPrev[idc0], cellSz);
+            Real *val = Uprev + m*len;
+            Real valc0 = val[idc0];
+            Real vale1 = val[ide1];
+            Real vale2 = val[ide2];
+            Real valw1 = val[idw1];
+            Real valw2 = val[idw2];
+            Real valn1 = val[idn1];
+            Real valn2 = val[idn2];
+            Real vals1 = val[ids1];
+            Real vals2 = val[ids2];
+            Real valt1 = val[idt1];
+            Real valt2 = val[idt2];
+            Real valb1 = val[idb1];
+            Real valb2 = val[idb2];
+            Real convection = calcConvectionKK(
+                valc0,
+                vale1, vale2, valw1, valw2,
+                valn1, valn2, vals1, vals2,
+                valt1, valt2, valb1, valb2,
+                u, v, w,
+                dxc, dyc, dzc
+            );
+            Real diffusion = calcDiffusion(
+                valc0,
+                vale1, valw1,
+                valn1, vals1,
+                valt1, valb1,
+                xc, xe, xw,
+                yc, yn, ys,
+                zc, zt, zb,
+                dxc, dyc, dzc,
+                viscosity
+            );
 
-            Real7 diffusionStencil = {
-                UPrev[idc0][m],
-                UPrev[ide1][m],
-                UPrev[idw1][m],
-                UPrev[idn1][m],
-                UPrev[ids1][m],
-                UPrev[idt1][m],
-                UPrev[idb1][m],
-            };
-            Real diffusion = calcDiffusion(diffusionStencil, coordStencil, cellSz, viscosity);
-
-            U[idc0][m] = UPrev[idc0][m] + dt*(- convection + diffusion);
+            (U + m*len)[idc0] = valc0 + dt*(- convection + diffusion);
         }
     }}}
 }
 
 void calcPoissonRhs(
-    Real3 U[],
-    Real rhs[],
+    Real *U,
+    Real *rhs,
+    Real *x,
+    Real *y,
+    Real *z,
     Real dt,
     Real scale,
-    Real x[],
-    Real y[],
-    Real z[],
-    Int3 sz,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int idc = getId(i, j, k, sz);
-        Int ide = getId(i + 1, j, k, sz);
-        Int idw = getId(i - 1, j, k, sz);
-        Int idn = getId(i, j + 1, k, sz);
-        Int ids = getId(i, j - 1, k, sz);
-        Int idt = getId(i, j, k + 1, sz);
-        Int idb = getId(i, j, k - 1, sz);
+    Int len = cx*cy*cz;
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
+        Int idc = getId(i, j, k, cx, cy, cz);
+        Int ide = getId(i + 1, j, k, cx, cy, cz);
+        Int idw = getId(i - 1, j, k, cx, cy, cz);
+        Int idn = getId(i, j + 1, k, cx, cy, cz);
+        Int ids = getId(i, j - 1, k, cx, cy, cz);
+        Int idt = getId(i, j, k + 1, cx, cy, cz);
+        Int idb = getId(i, j, k - 1, cx, cy, cz);
+        Real *u = U + 0*len;
+        Real *v = U + 1*len;
+        Real *w = U + 2*len;
         Real divergence = 0;
-        divergence += (U[ide][0] - U[idw][0])/(x[i + 1] - x[i - 1]);
-        divergence += (U[idn][1] - U[ids][1])/(y[j + 1] - y[j - 1]);
-        divergence += (U[idt][2] - U[idb][2])/(z[k + 1] - z[k - 1]);
+        divergence += (u[ide] - u[idw])/(x[i + 1] - x[i - 1]);
+        divergence += (v[idn] - v[ids])/(y[j + 1] - y[j - 1]);
+        divergence += (w[idt] - w[idb])/(z[k + 1] - z[k - 1]);
         rhs[idc] = divergence/(dt*scale);
     }}}
 }
 
 void projectP(
-    Real p[],
-    Real3 U[],
+    Real *U,
+    Real *p,
+    Real *x,
+    Real *y,
+    Real *z,
     Real dt,
-    Real x[],
-    Real y[],
-    Real z[],
-    Int3 sz,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int idc = getId(i, j, k, sz);
-        Int ide = getId(i + 1, j, k, sz);
-        Int idw = getId(i - 1, j, k, sz);
-        Int idn = getId(i, j + 1, k, sz);
-        Int ids = getId(i, j - 1, k, sz);
-        Int idt = getId(i, j, k + 1, sz);
-        Int idb = getId(i, j, k - 1, sz);
-        U[idc][0] -= dt*(p[ide] - p[idw])/(x[i + 1] - x[i - 1]);
-        U[idc][1] -= dt*(p[idn] - p[ids])/(y[j + 1] - y[j - 1]);
-        U[idc][2] -= dt*(p[idt] - p[idb])/(z[k + 1] - z[k - 1]);
+    Int len = cx*cy*cz;
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
+        Int idc = getId(i, j, k, cx, cy, cz);
+        Int ide = getId(i + 1, j, k, cx, cy, cz);
+        Int idw = getId(i - 1, j, k, cx, cy, cz);
+        Int idn = getId(i, j + 1, k, cx, cy, cz);
+        Int ids = getId(i, j - 1, k, cx, cy, cz);
+        Int idt = getId(i, j, k + 1, cx, cy, cz);
+        Int idb = getId(i, j, k - 1, cx, cy, cz);
+        (U + 0*len)[idc] -= dt*(p[ide] - p[idw])/(x[i + 1] - x[i - 1]);
+        (U + 1*len)[idc] -= dt*(p[idn] - p[ids])/(y[j + 1] - y[j - 1]);
+        (U + 2*len)[idc] -= dt*(p[idt] - p[idb])/(z[k + 1] - z[k - 1]);
     }}}
 }
 
 void calcNut(
-    Real3 U[],
-    Real nut[],
+    Real *U,
+    Real *nut,
+    Real *x,
+    Real *y,
+    Real *z,
+    Real *dx,
+    Real *dy,
+    Real *dz,
     Real Cs,
-    Real x[],
-    Real y[],
-    Real z[],
-    Real dx[],
-    Real dy[],
-    Real dz[],
-    Int3 sz,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int idc = getId(i, j, k, sz);
-        Int ide = getId(i + 1, j, k, sz);
-        Int idw = getId(i - 1, j, k, sz);
-        Int idn = getId(i, j + 1, k, sz);
-        Int ids = getId(i, j - 1, k, sz);
-        Int idt = getId(i, j, k + 1, sz);
-        Int idb = getId(i, j, k - 1, sz);
+    Int len = cx*cy*cz;
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
+        Int idc = getId(i, j, k, cx, cy, cz);
+        Int ide = getId(i + 1, j, k, cx, cy, cz);
+        Int idw = getId(i - 1, j, k, cx, cy, cz);
+        Int idn = getId(i, j + 1, k, cx, cy, cz);
+        Int ids = getId(i, j - 1, k, cx, cy, cz);
+        Int idt = getId(i, j, k + 1, cx, cy, cz);
+        Int idb = getId(i, j, k - 1, cx, cy, cz);
 
         Real dxew = x[i + 1] - x[i - 1];
         Real dyns = y[j + 1] - y[j - 1];
         Real dztb = z[k + 1] - z[k - 1];
         Real volume = dx[i]*dy[j]*dz[k];
 
-        Real dudx = (U[ide][0] - U[idw][0])/dxew;
-        Real dudy = (U[idn][0] - U[ids][0])/dyns;
-        Real dudz = (U[idt][0] - U[idb][0])/dztb;
-        Real dvdx = (U[ide][1] - U[idw][1])/dxew;
-        Real dvdy = (U[idn][1] - U[ids][1])/dyns;
-        Real dvdz = (U[idt][1] - U[idb][1])/dztb;
-        Real dwdx = (U[ide][2] - U[idw][2])/dxew;
-        Real dwdy = (U[idn][2] - U[ids][2])/dyns;
-        Real dwdz = (U[idt][2] - U[idb][2])/dztb;
+        Real *u = U + 0*len;
+        Real *v = U + 1*len;
+        Real *w = U + 2*len;
+
+        Real dudx = (u[ide] - u[idw])/dxew;
+        Real dudy = (u[idn] - u[ids])/dyns;
+        Real dudz = (u[idt] - u[idb])/dztb;
+        Real dvdx = (v[ide] - v[idw])/dxew;
+        Real dvdy = (v[idn] - v[ids])/dyns;
+        Real dvdz = (v[idt] - v[idb])/dztb;
+        Real dwdx = (w[ide] - w[idw])/dxew;
+        Real dwdy = (w[idn] - w[ids])/dyns;
+        Real dwdz = (w[idt] - w[idb])/dztb;
 
         Real s1 = 2*square(dudx);
         Real s2 = 2*square(dvdy);
@@ -262,76 +290,87 @@ void calcNut(
 }
 
 void calcDivergence(
-    Real3 U[],
-    Real div[],
-    Real x[],
-    Real y[],
-    Real z[],
-    Int3 sz,
+    Real *U,
+    Real *div,
+    Real *x,
+    Real *y,
+    Real *z,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int idc = getId(i, j, k, sz);
-        Int ide = getId(i + 1, j, k, sz);
-        Int idw = getId(i - 1, j, k, sz);
-        Int idn = getId(i, j + 1, k, sz);
-        Int ids = getId(i, j - 1, k, sz);
-        Int idt = getId(i, j, k + 1, sz);
-        Int idb = getId(i, j, k - 1, sz);
-
+    Int len = cx*cy*cz;
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
+        Int idc = getId(i, j, k, cx, cy, cz);
+        Int ide = getId(i + 1, j, k, cx, cy, cz);
+        Int idw = getId(i - 1, j, k, cx, cy, cz);
+        Int idn = getId(i, j + 1, k, cx, cy, cz);
+        Int ids = getId(i, j - 1, k, cx, cy, cz);
+        Int idt = getId(i, j, k + 1, cx, cy, cz);
+        Int idb = getId(i, j, k - 1, cx, cy, cz);
+        Real *u = U + 0*len;
+        Real *v = U + 1*len;
+        Real *w = U + 2*len;
         Real divergence = 0;
-        divergence += (U[ide][0] - U[idw][0])/(x[i + 1] - x[i - 1]);
-        divergence += (U[idn][1] - U[ids][1])/(y[j + 1] - y[j - 1]);
-        divergence += (U[idt][2] - U[idb][2])/(z[k + 1] - z[k - 1]);
+        divergence += (u[ide] - u[idw])/(x[i + 1] - x[i - 1]);
+        divergence += (v[idn] - v[ids])/(y[j + 1] - y[j - 1]);
+        divergence += (w[idt] - w[idb])/(z[k + 1] - z[k - 1]);
         div[idc] = divergence;
     }}}
 }
 
 Real calcNorm(
-    Real v[],
-    Int3 sz,
+    Real *x,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
+    Int len = cx*cy*cz;
     Real total = 0;
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        total += square(v[getId(i, j, k, sz)]);
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
+        total += square(x[getId(i, j, k, cx, cy, cz)]);
     }}}
     return sqrt(total);
 }
 
 void calcResidual(
-    Real7 A[],
-    Real x[],
-    Real b[],
-    Real r[],
-    Int3 sz,
+    Real *A,
+    Real *x,
+    Real *b,
+    Real *r,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int idc = getId(i, j, k, sz);
-        Int ide = getId(i + 1, j, k, sz);
-        Int idw = getId(i - 1, j, k, sz);
-        Int idn = getId(i, j + 1, k, sz);
-        Int ids = getId(i, j - 1, k, sz);
-        Int idt = getId(i, j, k + 1, sz);
-        Int idb = getId(i, j, k - 1, sz);
+    Int len = cx*cy*cz;
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
+        Int idc = getId(i, j, k, cx, cy, cz);
+        Int ide = getId(i + 1, j, k, cx, cy, cz);
+        Int idw = getId(i - 1, j, k, cx, cy, cz);
+        Int idn = getId(i, j + 1, k, cx, cy, cz);
+        Int ids = getId(i, j - 1, k, cx, cy, cz);
+        Int idt = getId(i, j, k + 1, cx, cy, cz);
+        Int idb = getId(i, j, k - 1, cx, cy, cz);
 
-        Real ac = A[idc][0];
-        Real ae = A[idc][1];
-        Real aw = A[idc][2];
-        Real an = A[idc][3];
-        Real as = A[idc][4];
-        Real at = A[idc][5];
-        Real ab = A[idc][6];
+        Real ac = (A + 0*len)[idc];
+        Real ae = (A + 1*len)[idc];
+        Real aw = (A + 2*len)[idc];
+        Real an = (A + 3*len)[idc];
+        Real as = (A + 4*len)[idc];
+        Real at = (A + 5*len)[idc];
+        Real ab = (A + 6*len)[idc];
 
         Real xc = x[idc];
         Real xe = x[ide];
@@ -340,40 +379,43 @@ void calcResidual(
         Real xs = x[ids];
         Real xt = x[idt];
         Real xb = x[idb];
-        
+
         r[idc] = b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb);
     }}}
 }
 
 void sweepSor(
-    Real7 A[],
-    Real x[],
-    Real b[],
+    Real *A,
+    Real *x,
+    Real *b,
     Real relaxRate,
     Int color,
-    Int3 sz,
+    Int cx,
+    Int cy,
+    Int cz,
     Int gc,
-    MpiInfo *mpi
+    MpiInfo &mpi
 ) {
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
+    Int len = cx*cy*cz;
+    for (Int i = gc; i < cx - gc; i ++) {
+    for (Int j = gc; j < cy - gc; j ++) {
+    for (Int k = gc; k < cz - gc; k ++) {
         if ((i + j + k)%2 == color) {
-            Int idc = getId(i, j, k, sz);
-            Int ide = getId(i + 1, j, k, sz);
-            Int idw = getId(i - 1, j, k, sz);
-            Int idn = getId(i, j + 1, k, sz);
-            Int ids = getId(i, j - 1, k, sz);
-            Int idt = getId(i, j, k + 1, sz);
-            Int idb = getId(i, j, k - 1, sz);
+            Int idc = getId(i, j, k, cx, cy, cz);
+            Int ide = getId(i + 1, j, k, cx, cy, cz);
+            Int idw = getId(i - 1, j, k, cx, cy, cz);
+            Int idn = getId(i, j + 1, k, cx, cy, cz);
+            Int ids = getId(i, j - 1, k, cx, cy, cz);
+            Int idt = getId(i, j, k + 1, cx, cy, cz);
+            Int idb = getId(i, j, k - 1, cx, cy, cz);
 
-            Real ac = A[idc][0];
-            Real ae = A[idc][1];
-            Real aw = A[idc][2];
-            Real an = A[idc][3];
-            Real as = A[idc][4];
-            Real at = A[idc][5];
-            Real ab = A[idc][6];
+            Real ac = (A + 0*len)[idc];
+            Real ae = (A + 1*len)[idc];
+            Real aw = (A + 2*len)[idc];
+            Real an = (A + 3*len)[idc];
+            Real as = (A + 4*len)[idc];
+            Real at = (A + 5*len)[idc];
+            Real ab = (A + 6*len)[idc];
 
             Real xc = x[idc];
             Real xe = x[ide];
@@ -387,130 +429,6 @@ void sweepSor(
 
             x[idc] = xc + relaxRate*relax;
         }
+        
     }}}
-}
-
-void runSor(
-    Real7 A[],
-    Real x[],
-    Real b[],
-    Real r[],
-    Real relaxRate,
-    Int &iter,
-    Int maxIter,
-    Real &err,
-    Real maxErr,
-    Int3 sz,
-    Int gc,
-    MpiInfo *mpi
-) {
-    Int effectiveCount = (sz[0] - 2*gc)*(sz[1] - 2*gc)*(sz[2] - 2*gc);
-    iter = 0;
-    do {
-        sweepSor(A, x, b, relaxRate, 0, sz, gc, mpi);
-        sweepSor(A, x, b, relaxRate, 1, sz, gc, mpi);
-        calcResidual(A, x, b, r, sz, gc, mpi);
-        err = calcNorm(r, sz, gc, mpi)/sqrt(effectiveCount);
-        iter ++;
-    } while (iter < maxIter && err > maxErr);
-}
-
-Real prepareA(
-    Real7 A[],
-    Real x[],
-    Real y[],
-    Real z[],
-    Real dx[],
-    Real dy[],
-    Real dz[],
-    Int3 sz,
-    Int gc,
-    MpiInfo *mpi
-) {
-    Real maxDiag = 0;
-
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int id = getId(i, j, k, sz);
-        Real dxc = dx[i];
-        Real dyc = dy[j];
-        Real dzc = dz[k];
-        Real dxec = x[i + 1] - x[i];
-        Real dxcw = x[i] - x[i - 1];
-        Real dync = y[j + 1] - y[j];
-        Real dycs = y[j] - y[j - 1];
-        Real dztc = z[k + 1] - z[k];
-        Real dzcb = z[k] - z[k - 1];
-        Real ae = 1/(dxc*dxec);
-        Real aw = 1/(dxc*dxcw);
-        Real an = 1/(dyc*dync);
-        Real as = 1/(dyc*dycs);
-        Real at = 1/(dzc*dztc);
-        Real ab = 1/(dzc*dzcb);
-        Real ac = - (ae + aw + an + as + at + ab);
-        A[id] = {ac, ae, aw, an, as, at, ab};
-        if (fabs(ac) > maxDiag) {
-            maxDiag = fabs(ac);
-        }
-    }}}
-
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int id = getId(i, j, k, sz);
-        for (Int m = 0; m < 7; m ++) {
-            A[id][m] /= maxDiag;
-        }
-    }}}
-
-    return maxDiag;
-}
-
-void applyUBc(
-    Real3 U[],
-    Real3 UPrev[],
-    Real3 UIn,
-    Real dt,
-    Real x[],
-    Real dy[],
-    Real dz[],
-    Int3 sz,
-    Int gc,
-    MpiInfo *mpi
-) {
-    for (Int i = 0 ; i < gc        ; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-    for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int id = getId(i, j, k, sz);
-        for (Int m = 0; m < 3; m ++) {
-            U[id][m] = UIn[m];
-        }
-    }}}
-
-    for (Int i = sz[0] - gc; i < sz[0]     ; i ++) {
-    for (Int j = gc        ; j < sz[1] - gc; j ++) {
-    for (Int k = gc        ; k < sz[2] - gc; k ++) {
-        Int id0 = getId(i, j, k, sz);
-        Int id1 = getId(i, j, k, sz);
-        Int id2 = getId(i, j, k, sz);
-        Real h1 = x[i] - x[i - 1];
-        Real h2 = x[i] - x[i - 2];
-        Real uOut = U[id0][0];
-        for (Int m = 0; m < 3; m ++) {
-            Real f0 = UPrev[id0][m];
-            Real f1 = UPrev[id1][m];
-            Real f2 = UPrev[id2][m];
-            Real grad = (f0*(h2*h2 - h1*h1) - f1*h2*h2 + f2*h1*h1)/(h1*h2*h2 - h2*h1*h1);
-            U[id0][m] = f0 - uOut*dt*grad;
-        }
-    }}}
-
-    for (Int i = gc; i < sz[0] - gc; i ++) {
-    for (Int j = gc; j < sz[1] - gc; j ++) {
-        Int ji1 = gc;
-        Int ji2 = gc + 1;
-        Int jo1 = gc - 1;
-        Int jo2 = gc - 2;
-    }}
 }

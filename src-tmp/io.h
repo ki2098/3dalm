@@ -14,50 +14,48 @@ static void buildMeshFromDir(
     Real *&dx,
     Real *&dy,
     Real *&dz,
-    Int &cx,
-    Int &cy,
-    Int &cz,
+    Int3 &sz,
     Int gc,
-    MpiInfo &mpi
+    MpiInfo *mpi
 ) {
     std::ifstream coordFile;
-    Int nx, ny, nz;
+    Int3 nodeSz;
 
     coordFile.open(path + "/x.txt");
-    coordFile >> nx;
-    double *nodeX = new double[nx];
-    for (int i = 0; i < nx; i ++) {
+    coordFile >> nodeSz[0];
+    double *nodeX = new double[nodeSz[0]];
+    for (int i = 0; i < nodeSz[0]; i ++) {
         coordFile >> nodeX[i];
     }
     coordFile.close();
 
     coordFile.open(path + "/y.txt");
-    coordFile >> ny;
-    double *nodeY = new double[ny];
-    for (int j = 0; j < ny; j ++) {
+    coordFile >> nodeSz[1];
+    double *nodeY = new double[nodeSz[1]];
+    for (int j = 0; j < nodeSz[1]; j ++) {
         coordFile >> nodeY[j];
     }
     coordFile.close();
 
     coordFile.open(path + "/z.txt");
-    coordFile >> nz;
-    double *nodeZ = new double[nz];
-    for (int k = 0; k < nz; k ++) {
+    coordFile >> nodeSz[2];
+    double *nodeZ = new double[nodeSz[2]];
+    for (int k = 0; k < nodeSz[2]; k ++) {
         coordFile >> nodeZ[k];
     }
     coordFile.close();
 
-    cx = nx - 1 + 2*gc;
-    cy = ny - 1 + 2*gc;
-    cz = nz - 1 + 2*gc;
-    x  = new double[cx];
-    dx = new double[cx];
-    y  = new double[cy];
-    dy = new double[cy];
-    z  = new double[cz];
-    dz = new double[cz];
+    sz[0] = nodeSz[0] - 1 + 2*gc;
+    sz[1] = nodeSz[1] - 1 + 2*gc;
+    sz[2] = nodeSz[2] - 1 + 2*gc;
+    x  = new double[sz[0]];
+    dx = new double[sz[0]];
+    y  = new double[sz[1]];
+    dy = new double[sz[1]];
+    z  = new double[sz[2]];
+    dz = new double[sz[2]];
 
-    for (int i = gc; i < cx - gc; i ++) {
+    for (int i = gc; i < sz[0] - gc; i ++) {
         dx[i] = nodeX[i - gc + 1] - nodeX[i - gc];
         x[i]  = nodeX[i - gc] + 0.5*dx[i];
     }
@@ -65,12 +63,12 @@ static void buildMeshFromDir(
         dx[i] = 2*dx[i + 1] - dx[i + 2];
         x[i]  = x[i + 1] - 0.5*(dx[i] + dx[i + 1]);
     }
-    for (int i = cx - gc; i < cx; i ++) {
+    for (int i = sz[0] - gc; i < sz[0]; i ++) {
         dx[i] = 2*dx[i - 1] - dx[i - 2];
         x[i]  = x[i - 1] + 0.5*(dx[i] + dx[i - 1]);
     }
 
-    for (int j = gc; j < cy - gc; j ++) {
+    for (int j = gc; j < sz[1] - gc; j ++) {
         dy[j] = nodeY[j - gc + 1] - nodeY[j - gc];
         y[j]  = nodeY[j - gc] + 0.5*dy[j];
     }
@@ -78,12 +76,12 @@ static void buildMeshFromDir(
         dy[j] = 2*dy[j + 1] - dy[j + 2];
         y[j]  = y[j + 1] - 0.5*(dy[j] + dy[j + 1]);
     }
-    for (int j = cy - gc; j < cy; j ++) {
+    for (int j = sz[1] - gc; j < sz[1]; j ++) {
         dy[j] = 2*dy[j - 1] - dy[j - 2];
         y[j]  = y[j - 1] + 0.5*(dy[j] + dy[j - 1]);
     }
 
-    for (int k = gc; k < cz - gc; k ++) {
+    for (int k = gc; k < sz[2] - gc; k ++) {
         dz[k] = nodeZ[k - gc + 1] - nodeZ[k - gc];
         z[k]  = nodeZ[k - gc] + 0.5*dz[k];
     }
@@ -91,7 +89,7 @@ static void buildMeshFromDir(
         dz[k] = 2*dz[k + 1] - dz[k + 2];
         z[k]  = z[k + 1] - 0.5*(dz[k] + dz[k + 1]);
     }
-    for (int k = cz - gc; k < cz; k ++) {
+    for (int k = sz[2] - gc; k < sz[2]; k ++) {
         dz[k] = 2*dz[k - 1] - dz[k - 2];
         z[k]  = z[k - 1] + 0.5*(dz[k] + dz[k - 1]);
     }
@@ -105,21 +103,19 @@ static void writeMesh(
     Real *dx,
     Real *dy,
     Real *dz,
-    Int cx,
-    Int cy,
-    Int cz,
+    Int3 sz,
     Int gc
 ) {
     std::ofstream meshFile(path);
-    meshFile << cx << " " << cy << " " << cz << " " << gc << std::endl;
+    meshFile << sz[0] << " " << sz[1] << " " << sz[2] << " " << gc << std::endl;
 
-    for (int i = 0; i < cx; i ++) {
+    for (int i = 0; i < sz[0]; i ++) {
         meshFile << x[i] << " " << dx[i] << std::endl;
     }
-    for (int j = 0; j < cy; j ++) {
+    for (int j = 0; j < sz[1]; j ++) {
         meshFile << y[j] << " " << dy[j] << std::endl;
     }
-    for (int k = 0; k < cz; k ++) {
+    for (int k = 0; k < sz[2]; k ++) {
         meshFile << z[k] << " " << dz[k] << std::endl;
     }
     meshFile.close();
@@ -127,16 +123,14 @@ static void writeMesh(
 
 static void writeCsv(
     std::string path,
-    Real **var,
+    Real *var[],
     Int varCount,
     Int *varDim,
-    std::string *varName,
-    Real *x,
-    Real *y,
-    Real *z,
-    Int cx,
-    Int cy,
-    Int cz,
+    std::string varName[],
+    Real x[],
+    Real y[],
+    Real z[],
+    Int3 sz,
     Int gc
 ) {
     std::ofstream oCsv(path);
@@ -153,16 +147,14 @@ static void writeCsv(
     }
     oCsv << std::endl;
 
-    Int len = cx*cy*cz;
-    for (Int k = 0; k < cz; k ++) {
-    for (Int j = 0; j < cy; j ++) {
-    for (Int i = 0; i < cx; i ++) {
+    for (Int k = 0; k < sz[2]; k ++) {
+    for (Int j = 0; j < sz[1]; j ++) {
+    for (Int i = 0; i < sz[0]; i ++) {
         oCsv << x[i] << "," << y[j] << "," << z[k];
-        for (Int v = 0; v < varCount; v ++) {
-            for (Int m = 0; m < varDim[v]; m ++) {
-                Real *varPtr = var[v] + m*len;
-                Int id = getId(i, j, k, cx, cy, cz);
-                oCsv << "," << varPtr[id];
+        for (Int n = 0; n < varCount; n ++) {
+            for (Int m = 0; m < varDim[n]; m ++) {
+                Int id = getId(i, j, k, sz)*varDim[n] + m;
+                oCsv << "," << var[n][id];
             }
         }
         oCsv << std::endl;
