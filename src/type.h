@@ -6,5 +6,5 @@ using Int = int64_t;
 using Real = double;
 
 struct MpiInfo {
-    int rank, size;
+    int size, rank;
 };

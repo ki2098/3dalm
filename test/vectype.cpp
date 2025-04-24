@@ -1,76 +1,88 @@
-#include <cstdio>
-#include <cstdint>
 #include <cmath>
+#include <cstdio>
+#include <iostream>
+#include <cstdint>
 #include <chrono>
-// #include "../src/type.h"
-// #include "../src/util.h"
-
-using Int = int64_t;
-using Real = double;
 
 using namespace std;
 
-template<typename T, int N>
-struct Vector {
-    T m[N];
+using Real = double;
+using Int = int64_t;
 
-    T &operator[](int i) {
-        return m[i];
-    }
-    
-    const T &operator[](int i) const {
-        return m[i];
-    }
-};
-
-using Int3 = Vector<Int, 3>;
-using Real3 = Vector<Real, 3>;
-
-static Int getId(Int i, Int j, Int k, Int3 sz) {
+Int index(Int i, Int j, Int k, Int *sz) {
     return i*sz[1]*sz[2] + j*sz[2] + k;
 }
 
-void foo(Real3 *data, Int3 sz, Int gc) {
+Real scheme(Real *stencil) {
+    Real valcc = stencil[0];
+    Real vale1 = stencil[1];
+    Real vale2 = stencil[2];
+    Real valw1 = stencil[3];
+    Real valw2 = stencil[4];
+    return vale2 - 4*vale1 + 6*valcc - 4*valw1 + valw2;
+}
+
+void foo(Real (*data)[3], Int *sz, Int gc) {
     Int len = sz[0]*sz[1]*sz[2];
-#pragma acc parallel loop independent collapse(3) present(data[:len]) copyin(sz, sz.m[:3])
+#pragma acc parallel loop independent collapse(3) present(data[:len]) copyin(sz[:3])
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int id = getId(i, j, k, sz);
+        Int id = index(i, j, k, sz);
         data[id][0] = sin(id);
         data[id][1] = cos(id);
         data[id][2] = 0.5*(sin(id) + cos(id));
     }}}
 }
 
-int main() {
-    Int gc = 2;
-    Int3 sz = {1000 + 2*gc, 300 + 2*gc, 300 + 2*gc};
+void bar(Real (*data)[3], Real (*result)[3], Int *sz, Int gc) {
     Int len = sz[0]*sz[1]*sz[2];
-
-    Real3 *data = new Real3[len];
-
-#pragma acc enter data create(data[:len])
-
-    auto start = chrono::high_resolution_clock::now();
-    foo(data, sz, gc);
-    auto end = chrono::high_resolution_clock::now();
-    auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
-
-    printf("%ld\n", duration.count());
-
-#pragma acc update host(data[:len])
-
-    Real total = 0;
-    for (Int i = gc; i < sz[2] - gc; i ++) {
+#pragma acc parallel loop independent collapse(3) present(data[:len], result[:len]) copyin(sz[:3])
+    for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
-        Int id = getId(i, j, k, sz);
-        total += data[id][0] + data[id][1] + data[id][2];
+        Int idcc = index(i, j, k, sz);
+        Int ide1 = index(i + 1, j, k, sz);
+        Int ide2 = index(i + 2, j, k, sz);
+        Int idw1 = index(i - 1, j, k, sz);
+        Int idw2 = index(i - 2, j, k, sz);
+        for (Int m = 0; m < 3; m ++) {
+            Real stencil[] = {data[idcc][m], data[ide1][m], data[ide2][m], data[idw1][m], data[idw2][m]};
+            result[idcc][m] = scheme(stencil);
+        }
     }}}
-    printf("%lf\n", total);
+}
+
+int main() {
+    Int gc = 2;
+    Int sz[] = {1000 + 2*gc, 300 + 2*gc, 300 + 2*gc};
+    Int len = sz[0]*sz[1]*sz[2];
+
+    Real (*data)[3] = new Real[len][3];
+    Real (*result)[3] = new Real[len][3];
+
+#pragma acc enter data create(data[:len], result[:len])
+
+    auto start = chrono::high_resolution_clock::now();
+
+    foo(data, sz, gc);
+    bar(data, result, sz, gc);
+    
+    Real total = 0;
+#pragma acc parallel loop independent collapse(3) present(result[:len]) copyin(sz[:3]) reduction(+:total)
+    for (Int i = gc; i < sz[0] - gc; i ++) {
+    for (Int j = gc; j < sz[1] - gc; j ++) {
+    for (Int k = gc; k < sz[2] - gc; k ++) {
+        Int id = index(i, j, k, sz);
+        total += result[id][0] + result[id][1] + result[id][2];
+    }}}
+
+    auto end = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+    cout << total << " " << duration.count() << endl;
+
+#pragma acc exit data delete(data[:len], result[:len])
 
     delete[] data;
-
-#pragma acc exit data delete(data[:len])
+    delete[] result;
 }
