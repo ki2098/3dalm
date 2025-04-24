@@ -1,5 +1,9 @@
 #include <cmath>
 #include "io.h"
+#include "json.hpp"
+
+using namespace std;
+using json = nlohmann::json;
 
 Real calc_convection_kk(Real stencil[13], Real U[3], Real dxyz[3]) {
     Real valc  = stencil[0];
@@ -258,6 +262,7 @@ Real calc_l2_norm(
     for (Int k = gc; k < size[2] - gc; k ++) {
         total += square(v[index(i, j, k, size)]);
     }}}
+    return total;
 }
 
 void calc_residual(
@@ -404,3 +409,357 @@ Real construct_A(
     return max_diag;
 }
 
+void apply_Ubc(
+    Real U[][3], Real Uold[][3], Real Uin[3],
+    Real x[], Real y[], Real z[],
+    Real dx[], Real dy[], Real dz[],
+    Real dt,
+    Int size[3], Int gc,
+    MpiInfo *mpi
+) {
+    /** x- fixed value inflow */
+    for (Int i = 0; i < gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int id = index(i, j, k, size);
+        U[id][0] = Uin[0];
+        U[id][1] = Uin[1];
+        U[id][2] = Uin[2];
+    }}}
+
+    /** x+ convective outflow */
+    for (Int i = size[0] - gc; i < size[0]; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int id0 = index(i    , j, k, size);
+        Int id1 = index(i - 1, j, k, size);
+        Int id2 = index(i - 2, j, k, size);
+        Real h1 = x[i] - x[i - 1];
+        Real h2 = x[i] - x[i - 2];
+        Real uout = U[id0][0];
+        for (Int m = 0; m < 3; m ++) {
+            Real f0 = Uold[id0][m];
+            Real f1 = Uold[id1][m];
+            Real f2 = Uold[id2][m];
+            Real grad = (f0*(h2*h2 - h1*h1) - f1*h2*h2 + f2*h1*h1)/(h1*h2*h2 - h2*h1*h1);
+            U[id0][m] = f0 - uout*dt*grad;
+        }
+    }}}
+
+    /** y- slip */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int ji  = gc;
+        Int jii = gc + 1;
+        Int jo  = gc - 1;
+        Int joo = gc - 2;
+        Int idi  = index(i, ji , k, size);
+        Int idii = index(i, jii, k, size);
+        Int ido  = index(i, jo , k, size);
+        Int idoo = index(i, joo, k, size);
+        Real hi  = 0.5*dy[ji ];
+        Real hii = 0.5*dy[jii] + dy[ji];
+        Real ho  = 0.5*dy[jo ];
+        Real hoo = 0.5*dy[joo] + dy[jo];
+        Real Ubc[] = {U[idi][0], 0, U[idi][2]};
+        for (Int m = 0; m < 3; m ++) {
+            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
+            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+        }
+    }}
+
+    /** y+ slip */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int ji  = size[1] - gc - 1;
+        Int jii = size[1] - gc - 2;
+        Int jo  = size[1] - gc;
+        Int joo = size[1] - gc + 1;
+        Int idi  = index(i, ji , k, size);
+        Int idii = index(i, jii, k, size);
+        Int ido  = index(i, jo , k, size);
+        Int idoo = index(i, joo, k, size);
+        Real hi  = 0.5*dy[ji ];
+        Real hii = 0.5*dy[jii] + dy[ji];
+        Real ho  = 0.5*dy[jo ];
+        Real hoo = 0.5*dy[joo] + dy[jo];
+        Real Ubc[] = {U[idi][0], 0, U[idi][2]};
+        for (Int m = 0; m < 3; m ++) {
+            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
+            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+        }
+    }}
+
+    /** z- non slip */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+        Int ki  = gc;
+        Int kii = gc - 1;
+        Int ko  = gc + 1;
+        Int koo = gc + 2;
+        Int idi  = index(i, j, ki , size);
+        Int idii = index(i, j, kii, size);
+        Int ido  = index(i, j, ko , size);
+        Int idoo = index(i, j, koo, size);
+        Real hi  = 0.5*dz[ki ];
+        Real hii = 0.5*dz[kii] + dz[ki];
+        Real ho  = 0.5*dz[ko ];
+        Real hoo = 0.5*dz[koo] + dz[ko];
+        Real Ubc[] = {0, 0, 0};
+        for (Int m = 0; m < 3; m ++) {
+            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
+            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+        }
+    }}
+
+    /** z+ slip */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+        Int ki  = size[2] - gc - 1;
+        Int kii = size[2] - gc - 2;
+        Int ko  = size[2] - gc;
+        Int koo = size[2] - gc + 1;
+        Int idi  = index(i, j, ki , size);
+        Int idii = index(i, j, kii, size);
+        Int ido  = index(i, j, ko , size);
+        Int idoo = index(i, j, koo, size);
+        Real hi  = 0.5*dz[ki ];
+        Real hii = 0.5*dz[kii] + dz[ki];
+        Real ho  = 0.5*dz[ko ];
+        Real hoo = 0.5*dz[koo] + dz[ko];
+        Real Ubc[] = {U[idi][0], U[idi][1], 0};
+        for (Int m = 0; m < 3; m ++) {
+            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
+            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+        }
+    }}
+}
+
+void apply_pbc(
+    Real p[],
+    Real dx[], Real dy[], Real dz[],
+    Int size[3], Int gc,
+    MpiInfo *mpi
+) {
+    /** x- grad = 0 */
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int ii = gc;
+        Int io = gc - 1;
+        p[index(io, j, k, size)] = p[index(ii, j, k, size)];
+    }}
+
+    /** x+ value = 0 */
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int ii = size[0] - gc - 1;
+        Int io = size[0] - gc;
+        Int hi = 0.5*dx[ii];
+        Int ho = 0.5*dx[io];
+        Real pbc = 0;
+        p[index(io, j, k, size)] = pbc - (p[index(ii, j, k, size)] - pbc)*(ho/hi);
+    }}
+
+    /** y- grad = 0 */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int ji = gc;
+        Int jo = gc - 1;
+        p[index(i, jo, k, size)] = p[index(i, ji, k, size)];
+    }}
+
+    /** y+ grad = 0 */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int ji = size[1] - gc - 1;
+        Int jo = size[1] - gc;
+        p[index(i, jo, k, size)] = p[index(i, ji, k, size)];
+    }}
+
+    /** z- grad = 0 */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+        Int ki = gc;
+        Int ko = gc - 1;
+        p[index(i, j, ko, size)] = p[index(i, j, ki, size)];
+    }}
+
+    /** z+ grad = 0 */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+        Int ki = size[2] - gc - 1;
+        Int ko = size[2] - gc;
+        p[index(i, j, ko, size)] = p[index(i, j, ki, size)];
+    }}
+}
+
+struct Runtime {
+    Int step = 0, max_step;
+    Real dt;
+
+    Real get_time() {
+        return dt*step;
+    }
+
+    void initialize(Int max_step, Real dt) {
+        this->max_step = max_step;
+        this->dt = dt;
+
+        printf("RUNTIME INFO\n");
+        printf("\tmax step = %ld\n", this->max_step);
+        printf("\tdt = %lf\n", this->dt);
+    }
+};
+
+struct Mesh {
+    Real *x, *y, *z, *dx, *dy, *dz;
+
+    void initialize(string path, Int size[3], Int gc, MpiInfo *mpi) {
+        build_mesh(path, x, y, z, dx, dy, dz, size, gc, mpi);
+
+        printf("MESH INFO\n");
+        printf("\tfolder = %s\n", path.c_str());
+        printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
+        printf("\tguide cell = %ld\n", gc);
+    }
+
+    void finalize() {
+        delete[] x;
+        delete[] y;
+        delete[] z;
+        delete[] dx;
+        delete[] dy;
+        delete[] dz;
+    }
+};
+
+struct Cfd {
+    Real (*U)[3], (*Uold)[3];
+    Real *p, *nut, *div;
+    Real Uin[3];
+    Real Re, Cs;
+
+    void initialize(Real Uin[3], Real Re, Real Cs, Int size[3]) {
+        this->Uin[0] = Uin[0];
+        this->Uin[1] = Uin[1];
+        this->Uin[2] = Uin[2];
+        this->Re = Re;
+        this->Cs = Cs;
+
+        Int len = size[0]*size[1]*size[2];
+        U = new Real[len][3];
+        Uold = new Real[len][3];
+        p = new Real[len];
+        nut = new Real[len];
+        div = new Real[len];
+
+        printf("CFD INFO\n");
+        printf("\tRe = %lf\n", this->Re);
+        printf("\tCs = %lf\n", this->Cs);
+        printf("\tUin = (%lf %lf %lf)\n", this->Uin[0], this->Uin[1], this->Uin[2]);
+    }
+
+    void finalize() {
+        delete[] U;
+        delete[] Uold;
+        delete[] p;
+        delete[] nut;
+        delete[] div;
+    }
+};
+
+struct Eq {
+    Real (*A)[7];
+    Real *b, *r;
+    Int it, max_it;
+    Real err, tol;
+
+    void initialize(Int max_it, Real tol, Int size[3]) {
+        this->max_it = max_it;
+        this->tol = tol;
+
+        Int len = size[0]*size[1]*size[2];
+        A = new Real[len][7];
+        b = new Real[len];
+        r = new Real[len];
+
+        printf("EQ INFO\n");
+        printf("\tmax iteration = %ld\n", this->max_it);
+        printf("\ttolerance = %lf\n", this->tol);
+    }
+
+    void finalize() {
+        delete[] A;
+        delete[] b;
+        delete[] r;
+    }
+};
+
+struct Solver {
+    Int size[3];
+    Int gc = 2;
+
+    MpiInfo mpi;
+    Runtime rt;
+    Mesh mesh;
+    Cfd cfd;
+    Eq eq;
+
+    void initialize(string path) {
+        printf("SETUP INFO\n");
+        printf("\tpath %s\n", path.c_str());
+
+        ifstream setup_file(path);
+        auto setup_json = json::parse(setup_file);
+
+        auto &rt_json = setup_json["runtime"];
+        Real dt = rt_json["dt"];
+        Real total_time = rt_json["time"];
+        rt.initialize(total_time/dt, dt);
+
+        auto &mesh_json = setup_json["mesh"];
+        string mesh_path = mesh_json["path"];
+        mesh.initialize(mesh_path, size, gc, &mpi);
+
+        auto &inflow_json = setup_json["inflow"];
+        auto &cfd_json = setup_json["cfd"];
+        Real Uin[3];
+        Uin[0] = inflow_json["value"][0];
+        Uin[1] = inflow_json["value"][1];
+        Uin[2] = inflow_json["value"][2];
+        Real Re = cfd_json["Re"];
+        Real Cs = cfd_json["Cs"];
+        cfd.initialize(Uin, Re, Cs, size);
+
+        auto &eq_json = setup_json["eq"];
+        Real tol = eq_json["tolerance"];
+        Real max_it = eq_json["max_iteration"];
+        eq.initialize(max_it, tol, size);
+    }
+
+    void finalize() {
+        mesh.finalize();
+        cfd.finalize();
+        eq.finalize();
+    }
+};
+
+int main(int argc, char *argv[]) {
+    Solver solver;
+    string setup_path(argv[1]);
+    solver.initialize(setup_path);
+
+    write_mesh(
+        "data/mesh.txt",
+        solver.mesh.x,
+        solver.mesh.y,
+        solver.mesh.z,
+        solver.mesh.dx,
+        solver.mesh.dy,
+        solver.mesh.dz,
+        solver.size,
+        solver.gc
+    );
+
+    solver.finalize();
+}
