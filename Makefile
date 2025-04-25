@@ -1,4 +1,2 @@
-flags = -Minfo=accel -Wall
-
-plain_windtunnel:
-	nvc++ $(flags) -acc src/plain_windtunnel.cpp -o bin/plain_windtunnel > make.log 2>&1
+windtunnel:
+	nvc++ -acc -Minfo=accel -Wall src/windtunnel.cpp -o bin/windtunnel > make.log 2>&1

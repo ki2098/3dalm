@@ -5,6 +5,7 @@
 using namespace std;
 using json = nlohmann::json;
 
+#pragma acc routine seq
 Real calc_convection_kk(Real stencil[13], Real U[3], Real dxyz[3]) {
     Real valc  = stencil[0];
     Real vale  = stencil[1];
@@ -27,16 +28,14 @@ Real calc_convection_kk(Real stencil[13], Real U[3], Real dxyz[3]) {
     Real dz = dxyz[2];
 
     Real convection =
-        u*(- valee + 8*vale - 8*valw + valww)/(12*dx)
-    + 0.25*fabs(u)*(valee - 4*vale + 6*valc - 4*valw + valww)/(dx)
-    +   v*(- valnn + 8*valn - 8*vals + valss)/(12*dy)
-    + 0.25*fabs(v)*(valnn - 4*valn + 6*valc - 4*vals + valss)/(dy)
-    +   w*(- valtt + 8*valt - 8*valb + valbb)/(12*dz)
-    + 0.25*fabs(w)*(valtt - 4*valt + 6*valc - 4*valb + valbb)/(dz);
+        u*(- valee + 8*vale - 8*valw + valww)/(12*dx) + fabs(u)*(valee - 4*vale + 6*valc - 4*valw + valww)/(4*dx)
+    +   v*(- valnn + 8*valn - 8*vals + valss)/(12*dy) + fabs(v)*(valnn - 4*valn + 6*valc - 4*vals + valss)/(4*dy)
+    +   w*(- valtt + 8*valt - 8*valb + valbb)/(12*dz) + fabs(w)*(valtt - 4*valt + 6*valc - 4*valb + valbb)/(4*dz);
 
     return convection;
 }
 
+#pragma acc routine seq
 Real calc_diffusion(Real stencil[7], Real xyz[9], Real dxyz[3], Real viscosity) {
     Real valc = stencil[0];
     Real vale = stencil[1];
@@ -75,6 +74,12 @@ void calc_intermediate_U(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], Uold[:len], nut[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -99,6 +104,7 @@ void calc_intermediate_U(
         };
         Real viscosity = 1/Re + nut[idc];
 
+#pragma acc loop seq
         for (Int m = 0; m < 3; m ++) {
             Real convection_stencil[] = {
                 Uold[idc ][m],
@@ -136,11 +142,15 @@ void calc_intermediate_U(
 void calc_poisson_rhs(
     Real U[][3], Real rhs[],
     Real x[], Real y[], Real z[],
-    Real dx[], Real dy[], Real dz[],
     Real dt, Real scale,
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], rhs[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -166,6 +176,11 @@ void project_p(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], p[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -190,6 +205,12 @@ void calc_nut(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], nut[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -233,6 +254,11 @@ void calc_divergence(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], div[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -257,12 +283,17 @@ Real calc_l2_norm(
     MpiInfo *mpi
 ) {
     Real total = 0;
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(v[:len]) \
+copyin(size[:3]) \
+reduction(+:total)
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         total += square(v[index(i, j, k, size)]);
     }}}
-    return total;
+    return sqrt(total);
 }
 
 void calc_residual(
@@ -270,6 +301,10 @@ void calc_residual(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], b[:len], r[:len]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -307,9 +342,14 @@ void sweep_sor(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], b[:len]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
+    if ((i + j + k)%2 == 0) {
         Int idc = index(i, j, k, size);
         Int ide = index(i + 1, j, k, size);
         Int idw = index(i - 1, j, k, size);
@@ -337,7 +377,7 @@ void sweep_sor(
         Real relaxation = (b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb))/ac;
 
         x[idc] = xc + relax_rate*relaxation;
-    }}}
+    }}}}
 }
 
 void run_sor(
@@ -357,7 +397,7 @@ void run_sor(
     } while (it < max_it && err > tol);
 }
 
-Real construct_A(
+Real build_A(
     Real A[][7],
     Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
@@ -365,6 +405,13 @@ Real construct_A(
     MpiInfo *mpi
 ) {
     Real max_diag = 0;
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3]) \
+reduction(max:max_diag)
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -372,12 +419,12 @@ Real construct_A(
         Real dxc = dx[i];
         Real dyc = dy[j];
         Real dzc = dz[k];
-        Real dxec = x[i + 1] - x[i];
-        Real dxcw = x[i] - x[i - 1];
-        Real dync = y[j + 1] - y[j];
-        Real dycs = y[j] - y[j - 1];
-        Real dztc = z[k + 1] - z[k];
-        Real dzcb = z[k] - z[k - 1];
+        Real dxec = x[i + 1] - x[i    ];
+        Real dxcw = x[i    ] - x[i - 1];
+        Real dync = y[j + 1] - y[j    ];
+        Real dycs = y[j    ] - y[j - 1];
+        Real dztc = z[k + 1] - z[k    ];
+        Real dzcb = z[k    ] - z[k - 1];
         Real ae = 1/(dxc*dxec);
         Real aw = 1/(dxc*dxcw);
         Real an = 1/(dyc*dync);
@@ -397,10 +444,14 @@ Real construct_A(
         }
     }}}
 
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int id = index(i, j, k, size);
+#pragma acc loop seq
         for (Int m = 0; m < 7; m ++) {
             A[id][m] /= max_diag;
         }
@@ -417,7 +468,13 @@ void apply_Ubc(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+
     /** x- fixed value inflow */
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len]) \
+copyin(Uin[:3]) \
+copyin(size[:3])
     for (Int i = 0; i < gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -428,6 +485,10 @@ void apply_Ubc(
     }}}
 
     /** x+ convective outflow */
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], Uold[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
     for (Int i = size[0] - gc; i < size[0]; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -441,12 +502,20 @@ void apply_Ubc(
             Real f0 = Uold[id0][m];
             Real f1 = Uold[id1][m];
             Real f2 = Uold[id2][m];
-            Real grad = (f0*(h2*h2 - h1*h1) - f1*h2*h2 + f2*h1*h1)/(h1*h2*h2 - h2*h1*h1);
+            Real grad = 
+                (f0*(h2*h2 - h1*h1) - f1*h2*h2 + f2*h1*h1)
+                /(h1*h2*h2 - h2*h1*h1);
             U[id0][m] = f0 - uout*dt*grad;
         }
     }}}
 
+/** CHECKED */
+
     /** y- slip */
+#pragma acc kernels loop independent collapse(2) \
+present(U[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int ji  = gc;
@@ -469,6 +538,10 @@ void apply_Ubc(
     }}
 
     /** y+ slip */
+#pragma acc kernels loop independent collapse(2) \
+present(U[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int ji  = size[1] - gc - 1;
@@ -491,12 +564,16 @@ void apply_Ubc(
     }}
 
     /** z- non slip */
+#pragma acc kernels loop independent collapse(2) \
+present(U[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
         Int ki  = gc;
-        Int kii = gc - 1;
-        Int ko  = gc + 1;
-        Int koo = gc + 2;
+        Int kii = gc + 1;
+        Int ko  = gc - 1;
+        Int koo = gc - 2;
         Int idi  = index(i, j, ki , size);
         Int idii = index(i, j, kii, size);
         Int ido  = index(i, j, ko , size);
@@ -513,6 +590,10 @@ void apply_Ubc(
     }}
 
     /** z+ slip */
+#pragma acc kernels loop independent collapse(2) \
+present(U[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
         Int ki  = size[2] - gc - 1;
@@ -541,56 +622,84 @@ void apply_pbc(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
+
     /** x- grad = 0 */
+#pragma acc kernels loop independent collapse(2) \
+present(p[:len]) \
+copyin(size[:3])
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int ii = gc;
         Int io = gc - 1;
         p[index(io, j, k, size)] = p[index(ii, j, k, size)];
     }}
+    // printf("x-\n");
 
     /** x+ value = 0 */
+#pragma acc kernels loop independent collapse(2) \
+present(p[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int ii = size[0] - gc - 1;
         Int io = size[0] - gc;
-        Int hi = 0.5*dx[ii];
-        Int ho = 0.5*dx[io];
+        Real hi = 0.5*dx[ii];
+        Real ho = 0.5*dx[io];
         Real pbc = 0;
         p[index(io, j, k, size)] = pbc - (p[index(ii, j, k, size)] - pbc)*(ho/hi);
+        // printf("%ld %ld %lf\n", j, k, hi);
     }}
+    // printf("x+\n");
 
     /** y- grad = 0 */
+#pragma acc kernels loop independent collapse(2) \
+present(p[:len]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int ji = gc;
         Int jo = gc - 1;
         p[index(i, jo, k, size)] = p[index(i, ji, k, size)];
     }}
+    // printf("y-\n");
 
     /** y+ grad = 0 */
+#pragma acc kernels loop independent collapse(2) \
+present(p[:len]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int ji = size[1] - gc - 1;
         Int jo = size[1] - gc;
         p[index(i, jo, k, size)] = p[index(i, ji, k, size)];
     }}
+    // printf("y+\n");
 
     /** z- grad = 0 */
+#pragma acc kernels loop independent collapse(2) \
+present(p[:len]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
         Int ki = gc;
         Int ko = gc - 1;
         p[index(i, j, ko, size)] = p[index(i, j, ki, size)];
     }}
+    // printf("z-\n");
 
     /** z+ grad = 0 */
+#pragma acc kernels loop independent collapse(2) \
+present(p[:len]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
         Int ki = size[2] - gc - 1;
         Int ko = size[2] - gc;
         p[index(i, j, ko, size)] = p[index(i, j, ki, size)];
     }}
+    // printf("z+\n");
 }
 
 struct Runtime {
@@ -617,19 +726,27 @@ struct Mesh {
     void initialize(string path, Int size[3], Int gc, MpiInfo *mpi) {
         build_mesh(path, x, y, z, dx, dy, dz, size, gc, mpi);
 
+#pragma acc enter data \
+copyin(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(dx[:size[0]], dy[:size[1]], dz[:size[2]])
+
         printf("MESH INFO\n");
         printf("\tfolder = %s\n", path.c_str());
         printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
         printf("\tguide cell = %ld\n", gc);
     }
 
-    void finalize() {
+    void finalize(Int size[3]) {
         delete[] x;
         delete[] y;
         delete[] z;
         delete[] dx;
         delete[] dy;
         delete[] dz;
+
+#pragma acc exit data \
+delete(x[:size[0]], y[:size[1]], z[:size[2]]) \
+delete(dx[:size[0]], dy[:size[1]], dz[:size[2]])
     }
 };
 
@@ -638,6 +755,7 @@ struct Cfd {
     Real *p, *nut, *div;
     Real Uin[3];
     Real Re, Cs;
+    Real avg_div;
 
     void initialize(Real Uin[3], Real Re, Real Cs, Int size[3]) {
         this->Uin[0] = Uin[0];
@@ -653,18 +771,25 @@ struct Cfd {
         nut = new Real[len];
         div = new Real[len];
 
+#pragma acc enter data \
+create(U[:len], Uold[:len], p[:len], nut[:len], div[:len])
+
         printf("CFD INFO\n");
         printf("\tRe = %lf\n", this->Re);
         printf("\tCs = %lf\n", this->Cs);
         printf("\tUin = (%lf %lf %lf)\n", this->Uin[0], this->Uin[1], this->Uin[2]);
     }
 
-    void finalize() {
+    void finalize(Int size[3]) {
         delete[] U;
         delete[] Uold;
         delete[] p;
         delete[] nut;
         delete[] div;
+
+        Int len = size[0]*size[1]*size[2];
+#pragma acc exit data \
+delete(U[:len], Uold[:len], p[:len], nut[:len], div[:len])
     }
 };
 
@@ -673,6 +798,8 @@ struct Eq {
     Real *b, *r;
     Int it, max_it;
     Real err, tol;
+    Real max_diag;
+    Real relax_rate = 1.2;
 
     void initialize(Int max_it, Real tol, Int size[3]) {
         this->max_it = max_it;
@@ -683,15 +810,22 @@ struct Eq {
         b = new Real[len];
         r = new Real[len];
 
+#pragma acc enter data \
+create(A[:len], b[:len], r[:len])
+
         printf("EQ INFO\n");
         printf("\tmax iteration = %ld\n", this->max_it);
         printf("\ttolerance = %lf\n", this->tol);
     }
 
-    void finalize() {
+    void finalize(Int size[3]) {
         delete[] A;
         delete[] b;
         delete[] r;
+
+        Int len = size[0]*size[1]*size[2];
+#pragma acc exit data \
+delete(A[:len], b[:len], r[:len])
     }
 };
 
@@ -735,12 +869,150 @@ struct Solver {
         Real tol = eq_json["tolerance"];
         Real max_it = eq_json["max_iteration"];
         eq.initialize(max_it, tol, size);
+
+        eq.max_diag = build_A(
+            eq.A,
+            mesh.x, mesh.y, mesh.z,
+            mesh.dx, mesh.dy, mesh.dz,
+            size, gc,
+            &mpi
+        );
+        printf("max diag = %lf\n", eq.max_diag);
+
+        Int len = size[0]*size[1]*size[2];
+        fill_array(cfd.U, cfd.Uin, len);
+        fill_array(cfd.Uold, cfd.Uin, len);
+        fill_array(cfd.p, 0., len);
+
+        apply_Ubc(
+            cfd.U, cfd.Uold, cfd.Uin,
+            mesh.x, mesh.y, mesh.z, mesh.dx, mesh.dy, mesh.dz,
+            rt.dt,
+            size, gc,
+            &mpi
+        );
+
+        calc_nut(
+            cfd.U, cfd.nut,
+            mesh.x, mesh.y, mesh.z,
+            mesh.dx, mesh.dy, mesh.dz,
+            cfd.Cs,
+            size, gc,
+            &mpi
+        );
+
+        calc_divergence(
+            cfd.U, cfd.div,
+            mesh.x, mesh.y, mesh.z,
+            size, gc,
+            &mpi
+        );
+
+        Int effective_count = (size[0] - 2*gc)*(size[1] - 2*gc)*(size[2] - 2*gc);
+        cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
+
+        printf("initial divergence = %lf\n", cfd.avg_div);
     }
 
     void finalize() {
-        mesh.finalize();
-        cfd.finalize();
-        eq.finalize();
+        mesh.finalize(size);
+        cfd.finalize(size);
+        eq.finalize(size);
+    }
+
+    void main_loop_once() {
+        Int len = size[0]*size[1]*size[2];
+
+        cpy_array(cfd.Uold, cfd.U, len);
+
+        // printf("1\n");
+
+        calc_intermediate_U(
+            cfd.U, cfd.Uold, cfd.nut,
+            mesh.x, mesh.y, mesh.z,
+            mesh.dx, mesh.dy, mesh.dz,
+            cfd.Re, rt.dt,
+            size, gc,
+            &mpi
+        );
+
+        // printf("2\n");
+
+        calc_poisson_rhs(
+            cfd.U, eq.b,
+            mesh.x, mesh.y, mesh.z,
+            rt.dt, eq.max_diag,
+            size, gc,
+            &mpi
+        );
+
+        // printf("3\n");
+
+        run_sor(
+            eq.A, cfd.p, eq.b, eq.r,
+            eq.relax_rate, eq.it, eq.max_it, eq.err, eq.tol,
+            size, gc,
+            &mpi
+        );
+
+        // printf("4\n");
+
+        apply_pbc(
+            cfd.p,
+            mesh.dx, mesh.dy, mesh.dz,
+            size, gc,
+            &mpi
+        );
+
+        // printf("5\n");
+
+        project_p(
+            cfd.U, cfd.p,
+            mesh.x, mesh.y, mesh.z,
+            rt.dt,
+            size, gc,
+            &mpi
+        );
+
+        // printf("6\n");
+
+        apply_Ubc(
+            cfd.U, cfd.Uold, cfd.Uin,
+            mesh.x, mesh.y, mesh.z,
+            mesh.dx, mesh.dy, mesh.dz,
+            rt.dt,
+            size, gc,
+            &mpi
+        );
+
+        // printf("7\n");
+
+        calc_nut(
+            cfd.U, cfd.nut,
+            mesh.x, mesh.y, mesh.z,
+            mesh.dx, mesh.dy, mesh.dz,
+            cfd.Cs,
+            size, gc,
+            &mpi
+        );
+
+        calc_divergence(
+            cfd.U, cfd.div,
+            mesh.x, mesh.y, mesh.z,
+            size, gc,
+            &mpi
+        );
+
+        // printf("8\n");
+
+        Int effective_count = (size[0] - 2*gc)*(size[1] - 2*gc)*(size[2] - 2*gc);
+        cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
+
+        // printf("9\n");
+
+        rt.step ++;
+
+        printf("%ld %e %ld %e %e\n", rt.step, rt.get_time(), eq.it, eq.err, cfd.avg_div);
     }
 };
 
@@ -748,17 +1020,38 @@ int main(int argc, char *argv[]) {
     Solver solver;
     string setup_path(argv[1]);
     solver.initialize(setup_path);
+    Int *size = solver.size;
+    Int len = size[0]*size[1]*size[2];
+
+    Real *var[] = {solver.cfd.U[0], solver.cfd.p};
+    Int var_dim[] = {3, 1};
+    string var_name[] = {"U", "p"};
 
     write_mesh(
         "data/mesh.txt",
-        solver.mesh.x,
-        solver.mesh.y,
-        solver.mesh.z,
-        solver.mesh.dx,
-        solver.mesh.dy,
-        solver.mesh.dz,
-        solver.size,
-        solver.gc
+        solver.mesh.x, solver.mesh.y, solver.mesh.z,
+        solver.mesh.dx, solver.mesh.dy, solver.mesh.dz,
+        solver.size, solver.gc
+    );
+
+#pragma acc update host(solver.cfd.U[:len], solver.cfd.p[:len])
+    write_csv(
+        "data/0.csv",
+        var, 2, var_dim, var_name,
+        solver.mesh.x, solver.mesh.y, solver.mesh.z,
+        solver.size, solver.gc
+    );
+
+    for (; solver.rt.step < 38;) {
+        solver.main_loop_once();
+    }    
+
+#pragma acc update host(solver.cfd.U[:len], solver.cfd.p[:len])
+    write_csv(
+        "data/38.csv",
+        var, 2, var_dim, var_name,
+        solver.mesh.x, solver.mesh.y, solver.mesh.z,
+        solver.size, solver.gc
     );
 
     solver.finalize();

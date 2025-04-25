@@ -24,7 +24,7 @@ Real scheme(Real *stencil) {
 
 void foo(Real (*data)[3], Int *sz, Int gc) {
     Int len = sz[0]*sz[1]*sz[2];
-#pragma acc parallel loop independent collapse(3) present(data[:len]) copyin(sz[:3])
+#pragma acc kernels loop independent collapse(3) present(data[:len])
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -35,9 +35,9 @@ void foo(Real (*data)[3], Int *sz, Int gc) {
     }}}
 }
 
-void bar(Real (*data)[3], Real (*result)[3], Int *sz, Int gc) {
+void bar(Real (*data)[3], Real (*result)[3], Real scale, Int *sz, Int gc) {
     Int len = sz[0]*sz[1]*sz[2];
-#pragma acc parallel loop independent collapse(3) present(data[:len], result[:len]) copyin(sz[:3])
+#pragma acc kernels loop independent collapse(3) present(data[:len], result[:len])
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {
@@ -48,7 +48,7 @@ void bar(Real (*data)[3], Real (*result)[3], Int *sz, Int gc) {
         Int idw2 = index(i - 2, j, k, sz);
         for (Int m = 0; m < 3; m ++) {
             Real stencil[] = {data[idcc][m], data[ide1][m], data[ide2][m], data[idw1][m], data[idw2][m]};
-            result[idcc][m] = scheme(stencil);
+            result[idcc][m] = scheme(stencil)/scale;
         }
     }}}
 }
@@ -66,10 +66,10 @@ int main() {
     auto start = chrono::high_resolution_clock::now();
 
     foo(data, sz, gc);
-    bar(data, result, sz, gc);
+    bar(data, result, 10, sz, gc);
     
     Real total = 0;
-#pragma acc parallel loop independent collapse(3) present(result[:len]) copyin(sz[:3]) reduction(+:total)
+#pragma acc kernels loop independent collapse(3) present(result[:len]) reduction(+:total)
     for (Int i = gc; i < sz[0] - gc; i ++) {
     for (Int j = gc; j < sz[1] - gc; j ++) {
     for (Int k = gc; k < sz[2] - gc; k ++) {

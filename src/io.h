@@ -109,3 +109,37 @@ static void write_mesh(
     }
     mesh_file.close();
 }
+
+static void write_csv(
+    std::string path,
+    Real *var[], Int var_count, Int var_dim[], std::string var_name[],
+    Real x[], Real y[], Real z[],
+    Int size[3], Int gc
+) {
+    std::ofstream o_csv(path);
+
+    o_csv << "x,y,z";
+    for (Int v = 0; v < var_count; v ++) {
+        if (var_dim[v] > 1) {
+            for (Int m = 0; m < var_dim[v]; m ++) {
+                o_csv << "," << var_name[v] + std::to_string(m);
+            }
+        } else {
+            o_csv << "," << var_name[v];
+        }
+    }
+    o_csv << std::endl;
+
+    for (Int k = 0; k < size[2]; k ++) {
+    for (Int j = 0; j < size[1]; j ++) {
+    for (Int i = 0; i < size[0]; i ++) {
+        o_csv << x[i] << "," << y[j] << "," << z[k];
+        for (Int v = 0; v < var_count; v ++) {
+            for (Int m = 0; m < var_dim[v]; m ++) {
+                Int id = index(i, j, k, size)*var_dim[v] + m;
+                o_csv << "," << var[v][id];
+            }
+        }
+        o_csv << std::endl;
+    }}}
+}
