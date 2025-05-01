@@ -53,3 +53,9 @@ copyin(value[:N])
         }
     }
 }
+
+#pragma acc routine seq
+template<typename T>
+Int sign(T x) {
+    return (x > T(0)) - (x < T(0));
+}
