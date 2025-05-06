@@ -1,6 +1,5 @@
 #include <cmath>
 #include <mpi.h>
-#include "mpi_type.h"
 #include "io.h"
 #include "json.hpp"
 
@@ -182,35 +181,6 @@ void calc_intermediate_U(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
-    MPI_Request req[4];
-    Int thick = 2;
-    /** exchange x- */
-    if (mpi->rank > 0) {
-        Int count = thick*size[1]*size[2];
-        Int send_head_id = index(gc        , 0, 0, size);
-        Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(U[send_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
-    }
-    /** exchange x+ */
-    if (mpi->rank < mpi->size - 1) {
-        Int count = thick*size[1]*size[2];
-        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
-        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(U[send_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
-        MPI_Irecv(U[recv_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
-    }
-    /** wait x- */
-    if (mpi->rank > 0) {
-        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
-        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
-    }
-    /** wait x+ */
-    if (mpi->rank < mpi->size - 1) {
-        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
-        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
-    }
-
     Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
 present(U[:len], Uold[:len], JU[:len], nut[:len]) \
@@ -287,35 +257,6 @@ void interpolate_JU(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
-    MPI_Request req[4];
-    Int thick = 1;
-    /** exchange x- */
-    if (mpi->rank > 0) {
-        Int count = thick*size[1]*size[2];
-        Int send_head_id = index(gc        , 0, 0, size);
-        Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(U[send_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
-    }
-    /** exchange x+ */
-    if (mpi->rank < mpi->size - 1) {
-        Int count = thick*size[1]*size[2];
-        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
-        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(U[send_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
-        MPI_Irecv(U[recv_head_id], count*3, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
-    }
-    /** wait x- */
-    if (mpi->rank > 0) {
-        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
-        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
-    }
-    /** wait x+ */
-    if (mpi->rank < mpi->size - 1) {
-        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
-        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
-    }
-
     Int len = size[0]*size[1]*size[2];
 
 #pragma acc kernels loop independent collapse(3) \
