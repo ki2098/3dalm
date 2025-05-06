@@ -7,6 +7,18 @@
 
 static void build_mesh(
     std::string path,
+    Real *&gx, Real *&gy, Real *&gz,
+    Real *&gdx, Real *&gdy, Real *&gdz,
+    Real *&x, Real *&y, Real *&z,
+    Real *&dx, Real *&dy, Real *&dz,
+    Int gsize[3], Int size[3], Int offset[3], Int gc,
+    MpiInfo *mpi
+) {
+    
+}
+
+static void build_mesh(
+    std::string path,
     Real *&x, Real *&y, Real *&z,
     Real *&dx, Real *&dy, Real *&dz,
     Int size[3], Int gc,
@@ -87,6 +99,10 @@ static void build_mesh(
         dz[k] = 2*dz[k - 1] - dz[k - 2];
         z[k]  = z[k - 1] + 0.5*(dz[k] + dz[k - 1]);
     }
+
+    delete[] node_x;
+    delete[] node_y;
+    delete[] node_z;
 }
 
 static void write_mesh(
