@@ -2,6 +2,7 @@
 #include <mpi.h>
 #include "io.h"
 #include "json.hpp"
+#include "mpi_type.h"
 
 using namespace std;
 using json = nlohmann::json;
@@ -181,6 +182,35 @@ void calc_intermediate_U(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    MPI_Request req[4];
+    const Int thick = 2;
+    /** exchange x- */
+    if (mpi->rank > 0) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(gc        , 0, 0, size);
+        Int recv_head_id = index(gc - thick, 0, 0, size);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** exchange x+ */
+    if (mpi->rank < mpi->size - 1) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
+        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** wait x- */
+    if (mpi->rank > 0) {
+        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
+    }
+    /** wait x+ */
+    if (mpi->rank < mpi->size - 1) {
+        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
+    }
+
     Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
 present(U[:len], Uold[:len], JU[:len], nut[:len]) \
@@ -257,6 +287,35 @@ void interpolate_JU(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    MPI_Request req[4];
+    const Int thick = 1;
+    /** exchange x- */
+    if (mpi->rank > 0) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(gc        , 0, 0, size);
+        Int recv_head_id = index(gc - thick, 0, 0, size);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** exchange x+ */
+    if (mpi->rank < mpi->size - 1) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
+        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** wait x- */
+    if (mpi->rank > 0) {
+        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
+    }
+    /** wait x+ */
+    if (mpi->rank < mpi->size - 1) {
+        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
+    }
+
     Int len = size[0]*size[1]*size[2];
 
 #pragma acc kernels loop independent collapse(3) \
@@ -374,6 +433,36 @@ void project_p(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    MPI_Request req[4];
+    const Int thick = 1;
+    /** exchange x- */
+    if (mpi->rank > 0) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(gc        , 0, 0, size);
+        Int recv_head_id = index(gc - thick, 0, 0, size);
+        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** exchange x+ */
+    if (mpi->rank < mpi->size - 1) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
+        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
+        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** wait x- */
+    if (mpi->rank > 0) {
+        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
+    }
+    /** wait x+ */
+    if (mpi->rank < mpi->size - 1) {
+        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
+    }
+/** FINISHED IN MAY 7 */
+
     Int len = size[0]*size[1]*size[2];
 
 #pragma acc kernels loop independent collapse(3) \
@@ -1061,26 +1150,73 @@ struct Runtime {
         this->max_step = max_step;
         this->dt = dt;
 
-        printf("RUNTIME INFO\n");
-        printf("\tmax step = %ld\n", this->max_step);
-        printf("\tdt = %lf\n", this->dt);
+        // printf("RUNTIME INFO\n");
+        // printf("\tmax step = %ld\n", this->max_step);
+        // printf("\tdt = %lf\n", this->dt);
     }
 };
 
 struct Mesh {
     Real *x, *y, *z, *dx, *dy, *dz;
 
-    void initialize(string path, Int size[3], Int gc, MpiInfo *mpi) {
+    void initialize_from_path(string path, Int size[3], Int gc, MpiInfo *mpi) {
         build_mesh(path, x, y, z, dx, dy, dz, size, gc, mpi);
 
 #pragma acc enter data \
 copyin(x[:size[0]], y[:size[1]], z[:size[2]]) \
 copyin(dx[:size[0]], dy[:size[1]], dz[:size[2]])
 
-        printf("MESH INFO\n");
-        printf("\tfolder = %s\n", path.c_str());
-        printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
-        printf("\tguide cell = %ld\n", gc);
+        // printf("MESH INFO\n");
+        // printf("\tfolder = %s\n", path.c_str());
+        // printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
+        // printf("\tguide cell = %ld\n", gc);
+    }
+
+    void initialize_from_global_mesh(Mesh *gmesh, Int gsize[3], Int size[3], Int offset[3], Int gc, MpiInfo *mpi) {
+        size[1] = gsize[1];
+        size[2] = gsize[2];
+        offset[1] = 0;
+        offset[2] = 0;
+
+        Int inner_x_count = gsize[0] - 2*gc;
+        Int segment_len = inner_x_count/mpi->size;
+        Int leftover = inner_x_count%mpi->size;
+
+        size[0] = segment_len + 2*gc;
+        if (mpi->rank < leftover) {
+            size[0] ++;
+        }
+        offset[0] = segment_len*mpi->rank;
+        if (mpi->rank < leftover) {
+            offset[0] += mpi->rank;
+        } else {
+            offset[0] += leftover;
+        }
+
+        x = new Real[size[0]];
+        dx = new Real[size[0]];
+        for (Int i = 0; i < size[0]; i ++) {
+            x[i] = gmesh->x[i + offset[0]];
+            dx[i] = gmesh->dx[i + offset[0]];
+        }
+
+        y = new Real[size[1]];
+        dy = new Real[size[1]];
+        for (Int j = 0; j < size[1]; j ++) {
+            y[j] = gmesh->y[j + offset[1]];
+            dy[j] = gmesh->dy[j + offset[1]];
+        }
+
+        z = new Real[size[2]];
+        dz = new Real[size[2]];
+        for (Int k = 0; k < size[2]; k ++) {
+            z[k] = gmesh->z[k + offset[2]];
+            dz[k] = gmesh->dz[k + offset[2]];
+        }
+
+#pragma acc enter data \
+copyin(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(dx[:size[0]], dy[:size[1]], dz[:size[2]]) 
     }
 
     void finalize(Int size[3]) {
@@ -1123,10 +1259,10 @@ struct Cfd {
 #pragma acc enter data \
 create(U[:len], Uold[:len], JU[:len], p[:len], nut[:len], div[:len])
 
-        printf("CFD INFO\n");
-        printf("\tRe = %lf\n", this->Re);
-        printf("\tCs = %lf\n", this->Cs);
-        printf("\tUin = (%lf %lf %lf)\n", this->Uin[0], this->Uin[1], this->Uin[2]);
+        // printf("CFD INFO\n");
+        // printf("\tRe = %lf\n", this->Re);
+        // printf("\tCs = %lf\n", this->Cs);
+        // printf("\tUin = (%lf %lf %lf)\n", this->Uin[0], this->Uin[1], this->Uin[2]);
     }
 
     void finalize(Int size[3]) {
@@ -1163,9 +1299,9 @@ struct Eq {
 #pragma acc enter data \
 create(A[:len], b[:len], r[:len])
 
-        printf("EQ INFO\n");
-        printf("\tmax iteration = %ld\n", this->max_it);
-        printf("\ttolerance = %lf\n", this->tol);
+        // printf("EQ INFO\n");
+        // printf("\tmax iteration = %ld\n", this->max_it);
+        // printf("\ttolerance = %lf\n", this->tol);
     }
 
     void finalize(Int size[3]) {
@@ -1180,18 +1316,20 @@ delete(A[:len], b[:len], r[:len])
 };
 
 struct Solver {
+    Int gsize[3];
     Int size[3];
+    Int offset[3];
     Int gc = 2;
 
     MpiInfo mpi;
     Runtime rt;
-    Mesh mesh;
+    Mesh gmesh, mesh;
     Cfd cfd;
     Eq eq;
 
     void initialize(string path) {
-        printf("SETUP INFO\n");
-        printf("\tpath %s\n", path.c_str());
+        MPI_Comm_size(MPI_COMM_WORLD, &mpi.size);
+        MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
 
         ifstream setup_file(path);
         auto setup_json = json::parse(setup_file);
@@ -1203,7 +1341,8 @@ struct Solver {
 
         auto &mesh_json = setup_json["mesh"];
         string mesh_path = mesh_json["path"];
-        mesh.initialize(mesh_path, size, gc, &mpi);
+        gmesh.initialize_from_path(mesh_path, gsize, gc, &mpi);
+        mesh.initialize_from_global_mesh(&gmesh, gsize, size, offset, gc, &mpi);
 
         auto &inflow_json = setup_json["inflow"];
         auto &cfd_json = setup_json["cfd"];
@@ -1227,7 +1366,6 @@ struct Solver {
             size, gc,
             &mpi
         );
-        printf("max diag = %lf\n", eq.max_diag);
 
         Int len = size[0]*size[1]*size[2];
         fill_array(cfd.U, cfd.Uin, len);
@@ -1275,10 +1413,30 @@ struct Solver {
         Int effective_count = (size[0] - 2*gc)*(size[1] - 2*gc)*(size[2] - 2*gc);
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
 
-        printf("initial divergence = %lf\n", cfd.avg_div);
+        if (mpi.rank == 0) {
+            printf("SETUP INFO\n");
+            printf("\tpath %s\n", path.c_str());
+
+            printf("MESH INFO\n");
+            printf("\tpath = %s\n", mesh_path.c_str());
+            printf("\tglobal size = (%ld %ld %ld)\n", gsize[0], gsize[1], gsize[2]);
+            printf("\tguide cell = %ld\n", gc);
+
+            printf("initial divergence = %lf\n", cfd.avg_div);
+            printf("max diag = %lf\n", eq.max_diag);
+        }
+        for (Int rank = 0; rank < mpi.size; rank ++) {
+            if (mpi.rank == rank) {
+                printf("PROC INFO %d/%d\n", mpi.rank, mpi.size);
+                printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
+                printf("\toffset = (%ld %ld %ld)\n", offset[0], offset[1], offset[2]);
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
     }
 
     void finalize() {
+        gmesh.finalize(gsize);
         mesh.finalize(size);
         cfd.finalize(size);
         eq.finalize(size);
@@ -1398,11 +1556,14 @@ struct Solver {
 
         rt.step ++;
 
-        printf("%ld %e %ld %e %e\n", rt.step, rt.get_time(), eq.it, eq.err, cfd.avg_div);
+        if (mpi.rank == 0) {
+            printf("%ld %e %ld %e %e\n", rt.step, rt.get_time(), eq.it, eq.err, cfd.avg_div);
+        }
     }
 };
 
 int main(int argc, char *argv[]) {
+    MPI_Init(&argc, &argv);
     Solver solver;
     string setup_path(argv[1]);
     solver.initialize(setup_path);
@@ -1415,13 +1576,20 @@ int main(int argc, char *argv[]) {
     Int var_count = 3;
 
     write_mesh(
-        "data/mesh.txt",
+        "data/mesh_" + to_string(solver.mpi.rank) + ".txt",
         solver.mesh.x, solver.mesh.y, solver.mesh.z,
         solver.mesh.dx, solver.mesh.dy, solver.mesh.dz,
         solver.size, solver.gc
     );
 
-#pragma acc update \
+    write_mesh(
+        "data/mesh.txt",
+        solver.gmesh.x, solver.gmesh.y, solver.gmesh.z,
+        solver.gmesh.dx, solver.gmesh.dy, solver.gmesh.dz,
+        solver.gsize, solver.gc
+    );
+
+/* #pragma acc update \
 host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
     // write_csv(
     //     "data/0.csv",
@@ -1441,7 +1609,8 @@ host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
         var, var_count, var_dim, var_name,
         solver.mesh.x, solver.mesh.y, solver.mesh.z,
         solver.size, solver.gc
-    );
+    ); */
 
     solver.finalize();
+    MPI_Finalize();
 }
