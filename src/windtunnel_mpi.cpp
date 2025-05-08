@@ -1,5 +1,6 @@
 #include <cmath>
 #include <mpi.h>
+#include <openacc.h>
 #include "io.h"
 #include "json.hpp"
 #include "mpi_type.h"
@@ -1461,6 +1462,10 @@ struct Solver {
         MPI_Comm_size(MPI_COMM_WORLD, &mpi.size);
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
 
+        int gpu_count = acc_get_num_devices(acc_device_nvidia);
+        int gpu_id = mpi.rank%gpu_count;
+        acc_set_device_num(gpu_id, acc_device_nvidia);
+
         ifstream setup_file(path);
         auto setup_json = json::parse(setup_file);
 
@@ -1566,6 +1571,9 @@ struct Solver {
             printf("SETUP INFO\n");
             printf("\tpath %s\n", path.c_str());
 
+            printf("DEVICE INFO\n");
+            printf("\tnumber of GPUs = %d\n", gpu_count);
+
             printf("MESH INFO\n");
             printf("\tpath = %s\n", mesh_path.c_str());
             printf("\tglobal size = (%ld %ld %ld)\n", gsize[0], gsize[1], gsize[2]);
@@ -1592,6 +1600,7 @@ struct Solver {
                 printf("PROC INFO %d/%d\n", mpi.rank, mpi.size);
                 printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
                 printf("\toffset = (%ld %ld %ld)\n", offset[0], offset[1], offset[2]);
+                printf("\tGPU id = %d\n", gpu_id);
             }
             MPI_Barrier(MPI_COMM_WORLD);
         }
