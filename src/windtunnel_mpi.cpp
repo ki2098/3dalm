@@ -197,8 +197,8 @@ void calc_intermediate_U(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -302,8 +302,8 @@ void interpolate_JU(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -448,8 +448,8 @@ void project_p(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -535,6 +535,35 @@ void calc_nut(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    MPI_Request req[4];
+    const Int thick = 1;
+    /** exchange x- */
+    if (mpi->rank > 0) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(gc        , 0, 0, size);
+        Int recv_head_id = index(gc - thick, 0, 0, size);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** exchange x+ */
+    if (mpi->rank < mpi->size - 1) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
+        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
+        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** wait x- */
+    if (mpi->rank > 0) {
+        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
+    }
+    /** wait x+ */
+    if (mpi->rank < mpi->size - 1) {
+        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
+    }
+
     Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
 present(U[:len], nut[:len]) \
@@ -653,6 +682,11 @@ reduction(+:total)
     for (Int k = gc; k < size[2] - gc; k ++) {
         total += square(v[index(i, j, k, size)]);
     }}}
+
+    if (mpi->size > 1) {
+        MPI_Allreduce(MPI_IN_PLACE, &total, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD);
+    }
+
     return sqrt(total);
 }
 
@@ -661,6 +695,35 @@ void calc_residual(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    MPI_Request req[4];
+    const Int thick = 1;
+    /** exchange x- */
+    if (mpi->rank > 0) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(gc        , 0, 0, size);
+        Int recv_head_id = index(gc - thick, 0, 0, size);
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** exchange x+ */
+    if (mpi->rank < mpi->size - 1) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
+        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** wait x- */
+    if (mpi->rank > 0) {
+        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
+    }
+    /** wait x+ */
+    if (mpi->rank < mpi->size - 1) {
+        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
+    }
+    
     Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
 present(A[:len], x[:len], b[:len], r[:len]) \
@@ -699,9 +762,38 @@ copyin(size[:3])
 void sweep_sor(
     Real A[][7], Real x[], Real b[],
     Real relax_rate, Int color,
-    Int size[3], Int gc,
+    Int size[3], Int offset[3], Int gc,
     MpiInfo *mpi
 ) {
+    MPI_Request req[4];
+    const Int thick = 1;
+    /** exchange x- */
+    if (mpi->rank > 0) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(gc        , 0, 0, size);
+        Int recv_head_id = index(gc - thick, 0, 0, size);
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** exchange x+ */
+    if (mpi->rank < mpi->size - 1) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
+        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** wait x- */
+    if (mpi->rank > 0) {
+        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
+    }
+    /** wait x+ */
+    if (mpi->rank < mpi->size - 1) {
+        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
+    }
+
     Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
 present(A[:len], x[:len], b[:len]) \
@@ -709,7 +801,7 @@ copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
-    if ((i + j + k)%2 == color) {
+    if ((i + j + k + offset[0] + offset[1] + offset[2])%2 == color) {
         Int idc = index(i, j, k, size);
         Int ide = index(i + 1, j, k, size);
         Int idw = index(i - 1, j, k, size);
@@ -743,14 +835,14 @@ copyin(size[:3])
 void run_sor(
     Real A[][7], Real x[], Real b[], Real r[],
     Real relax_rate, Int &it, Int max_it, Real &err, Real tol,
-    Int size[3], Int gc,
+    Int gsize[3], Int size[3], Int offset[3], Int gc,
     MpiInfo *mpi
 ) {
-    Int effective_cnt = (size[0] - 2*gc)*(size[1] - 2*gc)*(size[2] - 2*gc);
+    Int effective_cnt = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
     it = 0;
     do {
-        sweep_sor(A, x, b, relax_rate, 0, size, gc, mpi);
-        sweep_sor(A, x, b, relax_rate, 1, size, gc, mpi);
+        sweep_sor(A, x, b, relax_rate, 0, size, offset, gc, mpi);
+        sweep_sor(A, x, b, relax_rate, 1, size, offset, gc, mpi);
         calc_residual(A, x, b, r, size, gc, mpi);
         err = calc_l2_norm(r, size, gc, mpi)/sqrt(effective_cnt);
         it ++;
