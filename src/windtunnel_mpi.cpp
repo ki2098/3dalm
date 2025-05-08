@@ -189,16 +189,20 @@ void calc_intermediate_U(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(gc        , 0, 0, size);
         Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
     }
     /** exchange x+ */
     if (mpi->rank < mpi->size - 1) {
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -294,16 +298,20 @@ void interpolate_JU(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(gc        , 0, 0, size);
         Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
     }
     /** exchange x+ */
     if (mpi->rank < mpi->size - 1) {
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -440,16 +448,20 @@ void project_p(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(gc        , 0, 0, size);
         Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(p)
+        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 1, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(p)
+        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 1, MPI_COMM_WORLD, &req[1]);
     }
     /** exchange x+ */
     if (mpi->rank < mpi->size - 1) {
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(p)
+        MPI_Isend(&p[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 1, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(p)
+        MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 1, MPI_COMM_WORLD, &req[3]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -542,16 +554,20 @@ void calc_nut(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(gc        , 0, 0, size);
         Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
     }
     /** exchange x+ */
     if (mpi->rank < mpi->size - 1) {
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(U[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(U[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -702,16 +718,20 @@ void calc_residual(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(gc        , 0, 0, size);
         Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(x)
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 2, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(x)
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 2, MPI_COMM_WORLD, &req[1]);
     }
     /** exchange x+ */
     if (mpi->rank < mpi->size - 1) {
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(x)
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(x)
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[3]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -772,16 +792,20 @@ void sweep_sor(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(gc        , 0, 0, size);
         Int recv_head_id = index(gc - thick, 0, 0, size);
-        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(x)
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 2, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(x)
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank - 1, 2, MPI_COMM_WORLD, &req[1]);
     }
     /** exchange x+ */
     if (mpi->rank < mpi->size - 1) {
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[0]);
-        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(x)
+        MPI_Isend(&x[send_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(x)
+        MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[3]);
     }
     /** wait x- */
     if (mpi->rank > 0) {
@@ -797,7 +821,7 @@ void sweep_sor(
     Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
 present(A[:len], x[:len], b[:len]) \
-copyin(size[:3])
+copyin(size[:3], offset[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -838,13 +862,13 @@ void run_sor(
     Int gsize[3], Int size[3], Int offset[3], Int gc,
     MpiInfo *mpi
 ) {
-    Int effective_cnt = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
+    Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
     it = 0;
     do {
         sweep_sor(A, x, b, relax_rate, 0, size, offset, gc, mpi);
         sweep_sor(A, x, b, relax_rate, 1, size, offset, gc, mpi);
         calc_residual(A, x, b, r, size, gc, mpi);
-        err = calc_l2_norm(r, size, gc, mpi)/sqrt(effective_cnt);
+        err = calc_l2_norm(r, size, gc, mpi)/sqrt(effective_count);
         it ++;
     } while (it < max_it && err > tol);
 }
@@ -896,6 +920,10 @@ reduction(max:max_diag)
         }
     }}}
 
+    if (mpi->size > 1) {
+        MPI_Allreduce(MPI_IN_PLACE, &max_diag, 1, get_mpi_datatype<Real>(), MPI_MAX, MPI_COMM_WORLD);
+    }
+
 #pragma acc kernels loop independent collapse(3) \
 present(A[:len]) \
 copyin(size[:3])
@@ -922,39 +950,43 @@ void apply_Ubc(
     Int len = size[0]*size[1]*size[2];
 
     /** x- fixed value inflow */
+    if (mpi->rank == 0) {
 #pragma acc kernels loop independent collapse(3) \
 present(U[:len]) \
 copyin(Uin[:3]) \
 copyin(size[:3])
-    for (Int i = 0; i < gc; i ++) {
-    for (Int j = gc; j < size[1] - gc; j ++) {
-    for (Int k = gc; k < size[2] - gc; k ++) {
-        Int id = index(i, j, k, size);
-        U[id][0] = Uin[0];
-        U[id][1] = Uin[1];
-        U[id][2] = Uin[2];
-    }}}
+        for (Int i = 0; i < gc; i ++) {
+        for (Int j = gc; j < size[1] - gc; j ++) {
+        for (Int k = gc; k < size[2] - gc; k ++) {
+            Int id = index(i, j, k, size);
+            U[id][0] = Uin[0];
+            U[id][1] = Uin[1];
+            U[id][2] = Uin[2];
+        }}}
+    }
 
     /** x+ convective outflow */
+    if (mpi->rank == mpi->size - 1) {
 #pragma acc kernels loop independent collapse(3) \
 present(U[:len], Uold[:len]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
-    for (Int i = size[0] - gc; i < size[0]; i ++) {
-    for (Int j = gc; j < size[1] - gc; j ++) {
-    for (Int k = gc; k < size[2] - gc; k ++) {
-        Int id0 = index(i    , j, k, size);
-        Int id1 = index(i - 1, j, k, size);
-        Int id2 = index(i - 2, j, k, size);
-        Real uout = U[id0][0];
-        for (Int m = 0; m < 3; m ++) {
-            Real f0 = Uold[id0][m];
-            Real f1 = Uold[id1][m];
-            Real f2 = Uold[id2][m];
-            Real grad = (3*f0 - 4*f1 + f2)/2;
-            U[id0][m] = f0 - uout*dt*grad/dx[i];
-        }
-    }}}
+        for (Int i = size[0] - gc; i < size[0]; i ++) {
+        for (Int j = gc; j < size[1] - gc; j ++) {
+        for (Int k = gc; k < size[2] - gc; k ++) {
+            Int id0 = index(i    , j, k, size);
+            Int id1 = index(i - 1, j, k, size);
+            Int id2 = index(i - 2, j, k, size);
+            Real uout = U[id0][0];
+            for (Int m = 0; m < 3; m ++) {
+                Real f0 = Uold[id0][m];
+                Real f1 = Uold[id1][m];
+                Real f2 = Uold[id2][m];
+                Real grad = (3*f0 - 4*f1 + f2)/2;
+                U[id0][m] = f0 - uout*dt*grad/dx[i];
+            }
+        }}}
+    }
 
     /** y- slip */
 #pragma acc kernels loop independent collapse(2) \
@@ -1070,18 +1102,20 @@ void apply_JUbc(
     Int len = size[0]*size[1]*size[2];
 
     /** x- fixed value inflow */
+    if (mpi->rank == 0) {
 #pragma acc kernels loop independent collapse(2) \
 present(JU[:len]) \
 present(dy[:size[1]], dz[:size[2]]) \
 copyin(Uin[:3]) \
 copyin(size[:3])
-    for (Int j = gc; j < size[1] - gc; j ++) {
-    for (Int k = gc; k < size[2] - gc; k ++) {
-        Int i = gc - 1;
-        Int id = index(i, j, k, size);
-        Real yz = dy[j]*dz[k];
-        JU[id][0] = yz*Uin[0];
-    }}
+        for (Int j = gc; j < size[1] - gc; j ++) {
+        for (Int k = gc; k < size[2] - gc; k ++) {
+            Int i = gc - 1;
+            Int id = index(i, j, k, size);
+            Real yz = dy[j]*dz[k];
+            JU[id][0] = yz*Uin[0];
+        }}
+    }
     
     /** y- JV = 0 */
 #pragma acc kernels loop independent collapse(2) \
@@ -1138,33 +1172,37 @@ void apply_pbc(
     Int len = size[0]*size[1]*size[2];
 
     /** x- grad = 0 */
+    if (mpi->rank == 0) {
 #pragma acc kernels loop independent collapse(2) \
 present(p[:len]) \
 copyin(size[:3])
-    for (Int j = gc; j < size[1] - gc; j ++) {
-    for (Int k = gc; k < size[2] - gc; k ++) {
-        Int ii = gc;
-        Int io = gc - 1;
-        p[index(io, j, k, size)] = p[index(ii, j, k, size)];
-    }}
-    // printf("x-\n");
+        for (Int j = gc; j < size[1] - gc; j ++) {
+        for (Int k = gc; k < size[2] - gc; k ++) {
+            Int ii = gc;
+            Int io = gc - 1;
+            p[index(io, j, k, size)] = p[index(ii, j, k, size)];
+        }}
+        // printf("x-\n");
+    }
 
     /** x+ value = 0 */
+    if (mpi->rank == mpi->size - 1) {
 #pragma acc kernels loop independent collapse(2) \
 present(p[:len]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
-    for (Int j = gc; j < size[1] - gc; j ++) {
-    for (Int k = gc; k < size[2] - gc; k ++) {
-        Int ii = size[0] - gc - 1;
-        Int io = size[0] - gc;
-        Real hi = 0.5*dx[ii];
-        Real ho = 0.5*dx[io];
-        Real pbc = 0;
-        p[index(io, j, k, size)] = pbc - (p[index(ii, j, k, size)] - pbc)*(ho/hi);
-        // printf("%ld %ld %lf\n", j, k, hi);
-    }}
-    // printf("x+\n");
+        for (Int j = gc; j < size[1] - gc; j ++) {
+        for (Int k = gc; k < size[2] - gc; k ++) {
+            Int ii = size[0] - gc - 1;
+            Int io = size[0] - gc;
+            Real hi = 0.5*dx[ii];
+            Real ho = 0.5*dx[io];
+            Real pbc = 0;
+            p[index(io, j, k, size)] = pbc - (p[index(ii, j, k, size)] - pbc)*(ho/hi);
+            // printf("%ld %ld %lf\n", j, k, hi);
+        }}
+        // printf("x+\n");
+    }
 
     /** y- grad = 0 */
 #pragma acc kernels loop independent collapse(2) \
@@ -1436,6 +1474,8 @@ struct Solver {
         gmesh.initialize_from_path(mesh_path, gsize, gc, &mpi);
         mesh.initialize_from_global_mesh(&gmesh, gsize, size, offset, gc, &mpi);
 
+        printf("%d mesh OK\n", mpi.rank);
+
         auto &inflow_json = setup_json["inflow"];
         auto &cfd_json = setup_json["cfd"];
         Real Uin[3];
@@ -1446,10 +1486,14 @@ struct Solver {
         Real Cs = cfd_json["Cs"];
         cfd.initialize(Uin, Re, Cs, size);
 
+        printf("%d cfd OK\n", mpi.rank);
+
         auto &eq_json = setup_json["eq"];
         Real tol = eq_json["tolerance"];
         Real max_it = eq_json["max_iteration"];
         eq.initialize(max_it, tol, size);
+
+        printf("%d eq OK\n", mpi.rank);
 
         eq.max_diag = build_A(
             eq.A,
@@ -1458,6 +1502,8 @@ struct Solver {
             size, gc,
             &mpi
         );
+
+        printf("%d eq A OK\n", mpi.rank);
 
         Int len = size[0]*size[1]*size[2];
         fill_array(cfd.U, cfd.Uin, len);
@@ -1472,6 +1518,8 @@ struct Solver {
             &mpi
         );
 
+        printf("%d Ubc OK\n", mpi.rank);
+
         interpolate_JU(
             cfd.U, cfd.JU,
             mesh.dx, mesh.dy, mesh.dz,
@@ -1479,12 +1527,16 @@ struct Solver {
             &mpi
         );
 
+        printf("%d JU OK\n", mpi.rank);
+
         apply_JUbc(
             cfd.JU, cfd.Uin,
             mesh.dy, mesh.dz,
             size, gc,
             &mpi
         );
+
+        printf("%d JUbc OK\n", mpi.rank);
 
         calc_nut(
             cfd.U, cfd.nut,
@@ -1495,6 +1547,8 @@ struct Solver {
             &mpi
         );
 
+        printf("%d nut OK\n", mpi.rank);
+
         calc_divergence(
             cfd.JU, cfd.div,
             mesh.dx, mesh.dy, mesh.dz,
@@ -1502,9 +1556,12 @@ struct Solver {
             &mpi
         );
 
-        Int effective_count = (size[0] - 2*gc)*(size[1] - 2*gc)*(size[2] - 2*gc);
+        printf("%d div OK\n", mpi.rank);
+
+        Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
 
+        printf("%d ||div|| OK\n", mpi.rank);
         if (mpi.rank == 0) {
             printf("SETUP INFO\n");
             printf("\tpath %s\n", path.c_str());
@@ -1514,9 +1571,22 @@ struct Solver {
             printf("\tglobal size = (%ld %ld %ld)\n", gsize[0], gsize[1], gsize[2]);
             printf("\tguide cell = %ld\n", gc);
 
-            printf("initial divergence = %lf\n", cfd.avg_div);
-            printf("max diag = %lf\n", eq.max_diag);
+            printf("RUNTIME INFO\n");
+            printf("\tdt = %lf\n", rt.dt);
+            printf("\tmax step = %ld\n", rt.max_step);
+
+            printf("CFD INFO\n");
+            printf("\tRe = %lf\n", cfd.Re);
+            printf("\tCs = %lf\n", cfd.Cs);
+            printf("\tinitial div(U) = %lf\n", cfd.avg_div);
+
+            printf("EQ INFO\n");
+            printf("\tmax iteration = %ld\n", eq.max_it);
+            printf("\ttolerance = %lf\n", eq.tol);
+            printf("\tmax A diag = %lf\n", eq.max_diag);
         }
+        fflush(stdout);
+        MPI_Barrier(MPI_COMM_WORLD);
         for (Int rank = 0; rank < mpi.size; rank ++) {
             if (mpi.rank == rank) {
                 printf("PROC INFO %d/%d\n", mpi.rank, mpi.size);
@@ -1579,7 +1649,7 @@ struct Solver {
         run_sor(
             eq.A, cfd.p, eq.b, eq.r,
             eq.relax_rate, eq.it, eq.max_it, eq.err, eq.tol,
-            size, gc,
+            gsize, size, offset, gc,
             &mpi
         );
 
@@ -1641,7 +1711,7 @@ struct Solver {
 
         // printf("8\n");
 
-        Int effective_count = (size[0] - 2*gc)*(size[1] - 2*gc)*(size[2] - 2*gc);
+        Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
 
         // printf("9\n");
@@ -1681,27 +1751,27 @@ int main(int argc, char *argv[]) {
         solver.gsize, solver.gc
     );
 
-/* #pragma acc update \
-host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
-    // write_csv(
-    //     "data/0.csv",
-    //     var, var_count, var_dim, var_name,
-    //     solver.mesh.x, solver.mesh.y, solver.mesh.z,
-    //     solver.size, solver.gc
-    // );
+// #pragma acc update \
+// host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
+//     // write_csv(
+//     //     "data/0.csv",
+//     //     var, var_count, var_dim, var_name,
+//     //     solver.mesh.x, solver.mesh.y, solver.mesh.z,
+//     //     solver.size, solver.gc
+//     // );
 
-    for (; solver.rt.step < Int(200/solver.rt.dt);) {
+    for (; solver.rt.step < Int(10/solver.rt.dt);) {
         solver.main_loop_once();
     }    
 
 #pragma acc update \
 host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
     write_csv(
-        "data/final.csv",
+        "data/final_" + to_string(solver.mpi.rank) + ".csv",
         var, var_count, var_dim, var_name,
         solver.mesh.x, solver.mesh.y, solver.mesh.z,
         solver.size, solver.gc
-    ); */
+    );
 
     solver.finalize();
     MPI_Finalize();

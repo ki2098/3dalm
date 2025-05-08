@@ -1429,7 +1429,7 @@ host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
     //     solver.size, solver.gc
     // );
 
-    for (; solver.rt.step < Int(200/solver.rt.dt);) {
+    for (; solver.rt.step < Int(10/solver.rt.dt);) {
         solver.main_loop_once();
     }    
 
