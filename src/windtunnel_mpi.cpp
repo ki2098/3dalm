@@ -1458,6 +1458,9 @@ struct Solver {
     Cfd cfd;
     Eq eq;
 
+    json setup_json;
+    string output_prefix;
+
     void initialize(string path) {
         MPI_Comm_size(MPI_COMM_WORLD, &mpi.size);
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
@@ -1467,12 +1470,15 @@ struct Solver {
         acc_set_device_num(gpu_id, acc_device_nvidia);
 
         ifstream setup_file(path);
-        auto setup_json = json::parse(setup_file);
+        setup_json = json::parse(setup_file);
 
         auto &rt_json = setup_json["runtime"];
         Real dt = rt_json["dt"];
         Real total_time = rt_json["time"];
         rt.initialize(total_time/dt, dt);
+
+        auto &output_json = setup_json["output"];
+        output_prefix = output_json["prefix"];
 
         auto &mesh_json = setup_json["mesh"];
         string mesh_path = mesh_json["path"];
@@ -1583,6 +1589,9 @@ struct Solver {
             printf("\tdt = %lf\n", rt.dt);
             printf("\tmax step = %ld\n", rt.max_step);
 
+            printf("OUTPUT INFO\n");
+            printf("\tprefix = %s\n", output_prefix.c_str());
+
             printf("CFD INFO\n");
             printf("\tRe = %lf\n", cfd.Re);
             printf("\tCs = %lf\n", cfd.Cs);
@@ -1592,6 +1601,16 @@ struct Solver {
             printf("\tmax iteration = %ld\n", eq.max_it);
             printf("\ttolerance = %lf\n", eq.tol);
             printf("\tmax A diag = %lf\n", eq.max_diag);
+
+            write_mesh(
+                output_prefix + "_mesh.txt",
+                gmesh.x, gmesh.y, gmesh.z,
+                gmesh.dx, gmesh.dy, gmesh.dz,
+                gsize, gc
+            );
+
+            ofstream json_output(output_prefix + ".json");
+            json_output << setw(2) << setup_json;
         }
         fflush(stdout);
         MPI_Barrier(MPI_COMM_WORLD);
@@ -1746,20 +1765,6 @@ int main(int argc, char *argv[]) {
     string var_name[] = {"U", "p", "div"};
     Int var_count = 3;
 
-    write_mesh(
-        "data/mesh_" + to_string(solver.mpi.rank) + ".txt",
-        solver.mesh.x, solver.mesh.y, solver.mesh.z,
-        solver.mesh.dx, solver.mesh.dy, solver.mesh.dz,
-        solver.size, solver.gc
-    );
-
-    write_mesh(
-        "data/mesh.txt",
-        solver.gmesh.x, solver.gmesh.y, solver.gmesh.z,
-        solver.gmesh.dx, solver.gmesh.dy, solver.gmesh.dz,
-        solver.gsize, solver.gc
-    );
-
 // #pragma acc update \
 // host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
 //     // write_csv(
@@ -1775,8 +1780,9 @@ int main(int argc, char *argv[]) {
 
 #pragma acc update \
 host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
-    write_csv(
-        "data/final_" + to_string(solver.mpi.rank) + ".csv",
+    string filename = solver.output_prefix + "_" + to_string_fixed_length(solver.mpi.rank, 5) + "_" + to_string_fixed_length(solver.rt.step, 10);
+    write_binary(
+        filename,
         var, var_count, var_dim, var_name,
         solver.mesh.x, solver.mesh.y, solver.mesh.z,
         solver.size, solver.gc

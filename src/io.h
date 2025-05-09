@@ -132,30 +132,57 @@ static void write_csv(
     Real x[], Real y[], Real z[],
     Int size[3], Int gc
 ) {
-    std::ofstream o_csv(path);
+    std::ofstream ocsv(path);
 
-    o_csv << "x,y,z";
+    ocsv << "x,y,z";
     for (Int v = 0; v < var_count; v ++) {
         if (var_dim[v] > 1) {
             for (Int m = 0; m < var_dim[v]; m ++) {
-                o_csv << "," << var_name[v] + std::to_string(m);
+                ocsv << "," << var_name[v] + std::to_string(m);
             }
         } else {
-            o_csv << "," << var_name[v];
+            ocsv << "," << var_name[v];
         }
     }
-    o_csv << std::endl;
+    ocsv << std::endl;
 
     for (Int k = 0; k < size[2]; k ++) {
     for (Int j = 0; j < size[1]; j ++) {
     for (Int i = 0; i < size[0]; i ++) {
-        o_csv << x[i] << "," << y[j] << "," << z[k];
+        ocsv << x[i] << "," << y[j] << "," << z[k];
         for (Int v = 0; v < var_count; v ++) {
             for (Int m = 0; m < var_dim[v]; m ++) {
                 Int id = index(i, j, k, size)*var_dim[v] + m;
-                o_csv << "," << var[v][id];
+                ocsv << "," << var[v][id];
             }
         }
-        o_csv << std::endl;
+        ocsv << std::endl;
     }}}
+}
+
+static void write_binary(
+    std::string path,
+    Real *var[], Int var_count, Int *var_dim, std::string var_name[],
+    Real x[], Real y[], Real z[],
+    Int size[3], Int gc
+) {
+    std::ofstream ofs(path, std::ios::binary);
+    ofs.write((char*)size, 3*sizeof(Int));
+    ofs.write((char*)&gc, sizeof(Int));
+    ofs.write((char*)&var_count, sizeof(Int));
+    ofs.write((char*)var_dim, var_count*sizeof(Int));
+    for (Int v = 0; v < var_count; v ++) {
+        auto &s = var_name[v];
+        Int len = s.length();
+        ofs.write((char*)&len, sizeof(Int));
+        ofs.write((char*)s.c_str(), sizeof(char)*len);
+    }
+    ofs.write((char*)x, size[0]*sizeof(Real));
+    ofs.write((char*)y, size[1]*sizeof(Real));
+    ofs.write((char*)z, size[2]*sizeof(Real));
+    for (Int v = 0; v < var_count; v ++) {
+        Int count = size[0]*size[1]*size[2]*var_dim[v];
+        ofs.write((char*)var[v], count*sizeof(Real));
+    }
+    ofs.close();
 }

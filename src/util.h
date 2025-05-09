@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <sstream>
+#include <iomanip>
 #include "type.h"
 
 #pragma acc routine seq
@@ -58,4 +61,11 @@ copyin(value[:N])
 template<typename T>
 Int sign(T x) {
     return (x > T(0)) - (x < T(0));
+}
+
+template<typename T>
+std::string to_string_fixed_length(T value, Int len, char fill_char = '0') {
+    std::stringstream ss;
+    ss << std::setw(len) << std::setfill(fill_char) << value;
+    return ss.str();
 }

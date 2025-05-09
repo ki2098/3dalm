@@ -4,6 +4,10 @@
         "time":0.05
     },
 
+    "output":{
+        "prefix":"data/plain_windtunnel"
+    },
+
     "mesh":{
         "path":"mesh/20"
     },
