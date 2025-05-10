@@ -1269,6 +1269,31 @@ copyin(size[:3])
     // printf("z+\n");
 }
 
+void calc_partition(
+    Int gsize[3], Int size[3], Int offset[3], Int gc,
+    MpiInfo *mpi
+) {
+    size[1] = gsize[1];
+    size[2] = gsize[2];
+    offset[1] = 0;
+    offset[2] = 0;
+
+    Int inner_x_count = gsize[0] - 2*gc;
+    Int segment_len = inner_x_count/mpi->size;
+    Int leftover = inner_x_count%mpi->size;
+
+    size[0] = segment_len + 2*gc;
+    if (mpi->rank < leftover) {
+        size[0] ++;
+    }
+    offset[0] = segment_len*mpi->rank;
+    if (mpi->rank < leftover) {
+        offset[0] += mpi->rank;
+    } else {
+        offset[0] += leftover;
+    }
+}
+
 struct Runtime {
     Int step = 0, max_step;
     Real dt;
@@ -1304,25 +1329,26 @@ copyin(dx[:size[0]], dy[:size[1]], dz[:size[2]])
     }
 
     void initialize_from_global_mesh(Mesh *gmesh, Int gsize[3], Int size[3], Int offset[3], Int gc, MpiInfo *mpi) {
-        size[1] = gsize[1];
-        size[2] = gsize[2];
-        offset[1] = 0;
-        offset[2] = 0;
+        // size[1] = gsize[1];
+        // size[2] = gsize[2];
+        // offset[1] = 0;
+        // offset[2] = 0;
 
-        Int inner_x_count = gsize[0] - 2*gc;
-        Int segment_len = inner_x_count/mpi->size;
-        Int leftover = inner_x_count%mpi->size;
+        // Int inner_x_count = gsize[0] - 2*gc;
+        // Int segment_len = inner_x_count/mpi->size;
+        // Int leftover = inner_x_count%mpi->size;
 
-        size[0] = segment_len + 2*gc;
-        if (mpi->rank < leftover) {
-            size[0] ++;
-        }
-        offset[0] = segment_len*mpi->rank;
-        if (mpi->rank < leftover) {
-            offset[0] += mpi->rank;
-        } else {
-            offset[0] += leftover;
-        }
+        // size[0] = segment_len + 2*gc;
+        // if (mpi->rank < leftover) {
+        //     size[0] ++;
+        // }
+        // offset[0] = segment_len*mpi->rank;
+        // if (mpi->rank < leftover) {
+        //     offset[0] += mpi->rank;
+        // } else {
+        //     offset[0] += leftover;
+        // }
+        calc_partition(gsize, size, offset, gc, mpi);
 
         x = new Real[size[0]];
         dx = new Real[size[0]];
@@ -1459,6 +1485,7 @@ struct Solver {
     Eq eq;
 
     json setup_json;
+    json snapshot_json = {};
     string output_prefix;
 
     void initialize(string path) {
@@ -1611,6 +1638,27 @@ struct Solver {
 
             ofstream json_output(output_prefix + ".json");
             json_output << setw(2) << setup_json;
+            json_output.close();
+
+            json part_json;
+            part_json["size"] = {gsize[0], gsize[1], gsize[2]};
+            part_json["gc"] = gc;
+            part_json["partition"] = {};
+            for (Int rank = 0; rank < mpi.size; rank ++) {
+                json rank_json;
+                Int rank_size[3], rank_offset[3];
+                MpiInfo rank_info;
+                rank_info.size = mpi.size;
+                rank_info.rank = rank;
+                calc_partition(gsize, rank_size, rank_offset, gc, &rank_info);
+                rank_json["size"] = {rank_size[0], rank_size[1], rank_size[2]};
+                rank_json["offset"] = {rank_offset[0], rank_offset[1], rank_offset[2]};
+                rank_json["rank"] = rank;
+                part_json["partition"].push_back(rank_json);
+            }
+            ofstream part_output(output_prefix + "_partition.json");
+            part_output << setw(2) << part_json;
+            part_output.close();
         }
         fflush(stdout);
         MPI_Barrier(MPI_COMM_WORLD);
@@ -1626,6 +1674,11 @@ struct Solver {
     }
 
     void finalize() {
+        if (mpi.rank == 0) {
+            ofstream snapshot_output(output_prefix + "_snapshot.json");
+            snapshot_output << setw(2) << snapshot_json;
+            snapshot_output.close();
+        }
         gmesh.finalize(gsize);
         mesh.finalize(size);
         cfd.finalize(size);
@@ -1760,10 +1813,15 @@ int main(int argc, char *argv[]) {
     Int *size = solver.size;
     Int len = size[0]*size[1]*size[2];
 
+    Header header;
+    header.size[0] = solver.size[0];
+    header.size[1] = solver.size[1];
+    header.size[2] = solver.size[2];
+    header.gc = solver.gc;
+    header.var_count = 3;
+    header.var_dim = {3, 1, 1};
+    header.var_name = {"U", "p", "div"};
     Real *var[] = {solver.cfd.U[0], solver.cfd.p, solver.cfd.div};
-    Int var_dim[] = {3, 1, 1};
-    string var_name[] = {"U", "p", "div"};
-    Int var_count = 3;
 
 // #pragma acc update \
 // host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
@@ -1780,13 +1838,14 @@ int main(int argc, char *argv[]) {
 
 #pragma acc update \
 host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
-    string filename = solver.output_prefix + "_" + to_string_fixed_length(solver.mpi.rank, 5) + "_" + to_string_fixed_length(solver.rt.step, 10);
+    string filename = make_rank_binary_filename(solver.output_prefix, solver.mpi.rank, solver.rt.step);
     write_binary(
-        filename,
-        var, var_count, var_dim, var_name,
-        solver.mesh.x, solver.mesh.y, solver.mesh.z,
+        filename, header,
+        var, solver.mesh.x, solver.mesh.y, solver.mesh.z,
         solver.size, solver.gc
     );
+    json slice_json = {{"step", solver.rt.step}, {"time", solver.rt.get_time()}};
+    solver.snapshot_json.push_back(slice_json);
 
     solver.finalize();
     MPI_Finalize();

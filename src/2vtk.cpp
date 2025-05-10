@@ -28,33 +28,14 @@ void read_binary(
 ) {
     /** read header data */
     ifstream ifs(path, ios::binary);
-    Int size[3], gc, var_count;
-    ifs.read((char*)size, 3*sizeof(Int));
-    ifs.read((char*)&gc, sizeof(Int));
-    ifs.read((char*)&var_count, sizeof(Int));
-    vector<Int> var_dim(var_count);
-    ifs.read((char*)var_dim.data(), var_count*sizeof(Int));
-    vector<string> var_name;
-    for (Int v = 0; v < var_count; v ++) {
-        Int len;
-        ifs.read((char*)&len, sizeof(Int));
-        string s(len, '\0');
-        ifs.read((char*)s.c_str(), len*sizeof(char));
-        var_name.push_back(s);
-    }
-    printf("size = (%ld %ld %ld)\n", size[0], size[1], size[2]);
-    printf("gc = %ld\n", gc);
-    printf("var count = %ld\n", var_count);
-    printf("var dim = (\n");
-    for (int v = 0; v < var_count; v ++) {
-        printf("\t%ld\n", var_dim[v]);
-    }
-    printf(")\n");
-    printf("var name = (\n");
-    for (auto &s : var_name) {
-        printf("\t%s\n", s.c_str());
-    }
-    printf(")\n");
+    Header header;
+    header.read(ifs);
+    Int *size = header.size;
+    Int gc = header.gc;
+    Int var_count = header.var_count;
+    auto &var_dim = header.var_dim;
+    auto &var_name = header.var_name;
+    header.print_info();
 
     grid->SetDimensions(size[0], size[1], size[2]);
     const Int count = size[0]*size[1]*size[2];

@@ -3,19 +3,62 @@
 #include <fstream>
 #include <iostream>
 #include <cstdio>
+#include <vector>
 #include "util.h"
+#include "json.hpp"
 
-static void build_mesh(
-    std::string path,
-    Real *&gx, Real *&gy, Real *&gz,
-    Real *&gdx, Real *&gdy, Real *&gdz,
-    Real *&x, Real *&y, Real *&z,
-    Real *&dx, Real *&dy, Real *&dz,
-    Int gsize[3], Int size[3], Int offset[3], Int gc,
-    MpiInfo *mpi
-) {
-    
-}
+struct Header {
+    Int size[3];
+    Int gc;
+    Int var_count;
+    std::vector<Int> var_dim;
+    std::vector<std::string> var_name;
+
+    void print_info() {
+        printf("size = (%ld %ld %ld)\n", size[0], size[1], size[2]);
+        printf("gc = %ld\n", gc);
+        printf("var count = %ld\n", var_count);
+        printf("var dim = (\n");
+        for (int v = 0; v < var_count; v ++) {
+            printf("\t%ld\n", var_dim[v]);
+        }
+        printf(")\n");
+        printf("var name = (\n");
+        for (auto &s : var_name) {
+            printf("\t%s\n", s.c_str());
+        }
+        printf(")\n");
+    }
+
+    void write(std::ofstream &ofs) {
+        ofs.write((char*)size, 3*sizeof(Int));
+        ofs.write((char*)&gc, sizeof(Int));
+        ofs.write((char*)&var_count, sizeof(Int));
+        ofs.write((char*)var_dim.data(), var_count*sizeof(Int));
+        for (Int v = 0; v < var_count; v ++) {
+            auto &s = var_name[v];
+            Int len = s.length();
+            ofs.write((char*)&len, sizeof(Int));
+            ofs.write((char*)s.c_str(), sizeof(char)*len);
+        }
+    }
+
+    void read(std::ifstream &ifs) {
+        ifs.read((char*)size, 3*sizeof(Int));
+        ifs.read((char*)&gc, sizeof(Int));
+        ifs.read((char*)&var_count, sizeof(Int));
+        var_dim.resize(var_count);
+        ifs.read((char*)var_dim.data(), var_count*sizeof(Int));
+        var_name.resize(var_count);
+        for (Int v = 0; v < var_count; v ++) {
+            Int len;
+            ifs.read((char*)&len, sizeof(Int));
+            std::string s(len, '\0');
+            ifs.read((char*)s.c_str(), len*sizeof(char));
+            var_name[v] = s;
+        }
+    }
+};
 
 static void build_mesh(
     std::string path,
@@ -128,11 +171,15 @@ static void write_mesh(
 
 static void write_csv(
     std::string path,
-    Real *var[], Int var_count, Int var_dim[], std::string var_name[],
-    Real x[], Real y[], Real z[],
+    Header header,
+    Real *var[], Real x[], Real y[], Real z[],
     Int size[3], Int gc
 ) {
     std::ofstream ocsv(path);
+
+    Int var_count = header.var_count;
+    auto &var_dim = header.var_dim;
+    auto &var_name = header.var_name;
 
     ocsv << "x,y,z";
     for (Int v = 0; v < var_count; v ++) {
@@ -162,27 +209,28 @@ static void write_csv(
 
 static void write_binary(
     std::string path,
-    Real *var[], Int var_count, Int *var_dim, std::string var_name[],
-    Real x[], Real y[], Real z[],
+    Header &header,
+    Real *var[], Real x[], Real y[], Real z[],
     Int size[3], Int gc
 ) {
     std::ofstream ofs(path, std::ios::binary);
-    ofs.write((char*)size, 3*sizeof(Int));
-    ofs.write((char*)&gc, sizeof(Int));
-    ofs.write((char*)&var_count, sizeof(Int));
-    ofs.write((char*)var_dim, var_count*sizeof(Int));
-    for (Int v = 0; v < var_count; v ++) {
-        auto &s = var_name[v];
-        Int len = s.length();
-        ofs.write((char*)&len, sizeof(Int));
-        ofs.write((char*)s.c_str(), sizeof(char)*len);
-    }
+    header.write(ofs);
     ofs.write((char*)x, size[0]*sizeof(Real));
     ofs.write((char*)y, size[1]*sizeof(Real));
     ofs.write((char*)z, size[2]*sizeof(Real));
+    Int var_count = header.var_count;
+    auto &var_dim = header.var_dim;
     for (Int v = 0; v < var_count; v ++) {
         Int count = size[0]*size[1]*size[2]*var_dim[v];
         ofs.write((char*)var[v], count*sizeof(Real));
     }
     ofs.close();
+}
+
+static std::string make_rank_binary_filename(std::string prefix, Int rank, Int step) {
+    return prefix + "_" + to_string_fixed_length(rank, 5) + "_" + to_string_fixed_length(step, 10);
+}
+
+static std::string make_binary_filename(std::string prefix, Int step) {
+    return prefix + "_" + to_string_fixed_length(step, 10);
 }
