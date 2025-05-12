@@ -150,8 +150,8 @@ static void build_mesh(
 
 static void write_mesh(
     std::string path,
-    Real x[], Real y[], Real z[],
-    Real dx[], Real dy[], Real dz[],
+    Real *x, Real *y, Real *z,
+    Real *dx, Real *dy, Real *dz,
     Int size[3], Int gc
 ) {
     std::ofstream mesh_file(path);
@@ -172,14 +172,14 @@ static void write_mesh(
 static void write_csv(
     std::string path,
     Header header,
-    Real *var[], Real x[], Real y[], Real z[],
-    Int size[3], Int gc
+    Real *var[], Real x[], Real y[], Real z[]
 ) {
     std::ofstream ocsv(path);
 
     Int var_count = header.var_count;
     auto &var_dim = header.var_dim;
     auto &var_name = header.var_name;
+    auto size = header.size;
 
     ocsv << "x,y,z";
     for (Int v = 0; v < var_count; v ++) {
@@ -209,17 +209,18 @@ static void write_csv(
 
 static void write_binary(
     std::string path,
-    Header &header,
-    Real *var[], Real x[], Real y[], Real z[],
-    Int size[3], Int gc
+    Header *header,
+    Real **var, Real *x, Real *y, Real *z
 ) {
+    auto size = header->size;
+    auto gc = header->gc;
     std::ofstream ofs(path, std::ios::binary);
-    header.write(ofs);
+    header->write(ofs);
     ofs.write((char*)x, size[0]*sizeof(Real));
     ofs.write((char*)y, size[1]*sizeof(Real));
     ofs.write((char*)z, size[2]*sizeof(Real));
-    Int var_count = header.var_count;
-    auto &var_dim = header.var_dim;
+    Int var_count = header->var_count;
+    auto &var_dim = header->var_dim;
     for (Int v = 0; v < var_count; v ++) {
         Int count = size[0]*size[1]*size[2]*var_dim[v];
         ofs.write((char*)var[v], count*sizeof(Real));
@@ -227,7 +228,7 @@ static void write_binary(
     ofs.close();
 }
 
-static std::string make_rank_binary_filename(std::string prefix, Int rank, Int step) {
+static std::string make_rank_binary_filename(std::string prefix, int rank, Int step) {
     return prefix + "_" + to_string_fixed_length(rank, 5) + "_" + to_string_fixed_length(step, 10);
 }
 

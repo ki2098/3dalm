@@ -4,6 +4,7 @@
 #include <time.h>
 #include <string>
 #include <vector>
+#include <cassert>
 #include <vtkNew.h>
 #include <vtkStructuredGrid.h>
 #include <vtkRectilinearGrid.h>
@@ -76,6 +77,7 @@ void read_binary(
 
         vector<Real> var(count*var_dim[v]);
         ifs.read((char*)var.data(), count*var_dim[v]*sizeof(Real));
+        assert(ifs.gcount() == count*var_dim[v]*sizeof(Real));
         for (Int i = 0; i < size[0]; i ++) {
         for (Int j = 0; j < size[1]; j ++) {
         for (Int k = 0; k < size[2]; k ++) {

@@ -1832,7 +1832,7 @@ int main(int argc, char *argv[]) {
 //     //     solver.size, solver.gc
 //     // );
 
-    for (; solver.rt.step < Int(10/solver.rt.dt);) {
+    for (; solver.rt.step < Int(100/solver.rt.dt);) {
         solver.main_loop_once();
     }    
 
@@ -1840,9 +1840,8 @@ int main(int argc, char *argv[]) {
 host(solver.cfd.U[:len], solver.cfd.p[:len], solver.cfd.div[:len])
     string filename = make_rank_binary_filename(solver.output_prefix, solver.mpi.rank, solver.rt.step);
     write_binary(
-        filename, header,
-        var, solver.mesh.x, solver.mesh.y, solver.mesh.z,
-        solver.size, solver.gc
+        filename, &header,
+        var, solver.mesh.x, solver.mesh.y, solver.mesh.z
     );
     json slice_json = {{"step", solver.rt.step}, {"time", solver.rt.get_time()}};
     solver.snapshot_json.push_back(slice_json);
