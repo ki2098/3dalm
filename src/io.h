@@ -171,15 +171,15 @@ static void write_mesh(
 
 static void write_csv(
     std::string path,
-    Header header,
+    Header *header,
     Real *var[], Real x[], Real y[], Real z[]
 ) {
     std::ofstream ocsv(path);
 
-    Int var_count = header.var_count;
-    auto &var_dim = header.var_dim;
-    auto &var_name = header.var_name;
-    auto size = header.size;
+    Int var_count = header->var_count;
+    auto &var_dim = header->var_dim;
+    auto &var_name = header->var_name;
+    auto size = header->size;
 
     ocsv << "x,y,z";
     for (Int v = 0; v < var_count; v ++) {
