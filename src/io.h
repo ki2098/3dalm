@@ -213,7 +213,6 @@ static void write_binary(
     Real **var, Real *x, Real *y, Real *z
 ) {
     auto size = header->size;
-    auto gc = header->gc;
     std::ofstream ofs(path, std::ios::binary);
     header->write(ofs);
     ofs.write((char*)x, size[0]*sizeof(Real));

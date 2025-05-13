@@ -32,7 +32,6 @@ void read_binary(
     Header header;
     header.read(ifs);
     Int *size = header.size;
-    Int gc = header.gc;
     Int var_count = header.var_count;
     auto &var_dim = header.var_dim;
     auto &var_name = header.var_name;
