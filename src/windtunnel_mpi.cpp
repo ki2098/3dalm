@@ -1632,6 +1632,7 @@ struct Solver {
 
         Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
+        cfd.max_cfl = calc_max_cfl(cfd.U, mesh.dx, mesh.dy, mesh.dz, rt.dt, size, gc, &mpi);
 
         // printf("%d ||div|| OK\n", mpi.rank);
         if (mpi.rank == 0) {
@@ -1656,7 +1657,8 @@ struct Solver {
             printf("CFD INFO\n");
             printf("\tRe = %lf\n", cfd.Re);
             printf("\tCs = %lf\n", cfd.Cs);
-            printf("\tinitial div(U) = %lf\n", cfd.avg_div);
+            printf("\tinitial div(U) = %e\n", cfd.avg_div);
+            printf("\tinitial max cfd = %e\n", cfd.max_cfl);
 
             printf("EQ INFO\n");
             printf("\tmax iteration = %ld\n", eq.max_it);
