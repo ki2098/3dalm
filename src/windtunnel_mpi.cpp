@@ -683,6 +683,40 @@ copyin(size[:3])
     }}}
 }
 
+Real calc_max_cfl(
+    Real U[][3],
+    Real dx[], Real dy[], Real dz[],
+    Real dt,
+    Int size[3], Int gc,
+    MpiInfo *mpi
+) {
+    Real max_cfl = 0;
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3]) \
+reduction(max:max_cfl)
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int id = index(i, j, k, size);
+        Real local_cfl = 
+            fabs(U[id][0])*dt/dx[i] 
+        +   fabs(U[id][1])*dt/dy[j]
+        +   fabs(U[id][2])*dt/dz[k];
+        if (local_cfl > max_cfl) {
+            max_cfl = local_cfl;
+        }
+    }}}
+
+    if (mpi->size > 1) {
+        MPI_Allreduce(MPI_IN_PLACE, &max_cfl, 1, get_mpi_datatype<Real>(), MPI_MAX, MPI_COMM_WORLD);
+    }
+
+    return max_cfl;
+}
+
 Real calc_l2_norm(
     Real v[],
     Int size[3], Int gc,
@@ -1396,7 +1430,7 @@ struct Cfd {
     Real *p, *nut, *div;
     Real Uin[3];
     Real Re, Cs;
-    Real avg_div;
+    Real avg_div, max_cfl;
 
     void initialize(Real Uin[3], Real Re, Real Cs, Int size[3]) {
         this->Uin[0] = Uin[0];
@@ -1796,12 +1830,14 @@ struct Solver {
         Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
 
+        cfd.max_cfl = calc_max_cfl(cfd.U, mesh.dx, mesh.dy, mesh.dz, rt.dt, size, gc, &mpi);
+
         // printf("9\n");
 
         rt.step ++;
 
         if (mpi.rank == 0) {
-            printf("%ld %e %ld %e %e\n", rt.step, rt.get_time(), eq.it, eq.err, cfd.avg_div);
+            printf("%ld %e %ld %e %e %e\n", rt.step, rt.get_time(), eq.it, eq.err, cfd.avg_div, cfd.max_cfl);
         }
     }
 };
