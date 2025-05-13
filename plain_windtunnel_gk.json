@@ -1,7 +1,7 @@
 {
     "runtime":{
         "dt":5e-4,
-        "time":1.5e-3
+        "time":100
     },
 
     "output":{
