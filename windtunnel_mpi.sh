@@ -13,4 +13,4 @@ module load nvompi
 echo $PJM_MPI_PROCS
 echo $PJM_PROC_BY_NODE
 
-mpiexec -n 4 -display-map bin/windtunnel_mpi plain_windtunnel.json
+mpiexec -n 4 -display-map bin/windtunnel_mpi plain_windtunnel_gk.json

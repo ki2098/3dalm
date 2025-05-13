@@ -1512,7 +1512,7 @@ struct Solver {
         gmesh.initialize_from_path(mesh_path, gsize, gc, &mpi);
         mesh.initialize_from_global_mesh(&gmesh, gsize, size, offset, gc, &mpi);
 
-        printf("%d mesh OK\n", mpi.rank);
+        // printf("%d mesh OK\n", mpi.rank);
 
         auto &inflow_json = setup_json["inflow"];
         auto &cfd_json = setup_json["cfd"];
@@ -1524,14 +1524,14 @@ struct Solver {
         Real Cs = cfd_json["Cs"];
         cfd.initialize(Uin, Re, Cs, size);
 
-        printf("%d cfd OK\n", mpi.rank);
+        // printf("%d cfd OK\n", mpi.rank);
 
         auto &eq_json = setup_json["eq"];
         Real tol = eq_json["tolerance"];
         Real max_it = eq_json["max_iteration"];
         eq.initialize(max_it, tol, size);
 
-        printf("%d eq OK\n", mpi.rank);
+        // printf("%d eq OK\n", mpi.rank);
 
         eq.max_diag = build_A(
             eq.A,
@@ -1541,7 +1541,7 @@ struct Solver {
             &mpi
         );
 
-        printf("%d eq A OK\n", mpi.rank);
+        // printf("%d eq A OK\n", mpi.rank);
 
         Int len = size[0]*size[1]*size[2];
         fill_array(cfd.U, cfd.Uin, len);
@@ -1556,7 +1556,7 @@ struct Solver {
             &mpi
         );
 
-        printf("%d Ubc OK\n", mpi.rank);
+        // printf("%d Ubc OK\n", mpi.rank);
 
         interpolate_JU(
             cfd.U, cfd.JU,
@@ -1565,7 +1565,7 @@ struct Solver {
             &mpi
         );
 
-        printf("%d JU OK\n", mpi.rank);
+        // printf("%d JU OK\n", mpi.rank);
 
         apply_JUbc(
             cfd.JU, cfd.Uin,
@@ -1574,7 +1574,7 @@ struct Solver {
             &mpi
         );
 
-        printf("%d JUbc OK\n", mpi.rank);
+        // printf("%d JUbc OK\n", mpi.rank);
 
         calc_nut(
             cfd.U, cfd.nut,
@@ -1585,7 +1585,7 @@ struct Solver {
             &mpi
         );
 
-        printf("%d nut OK\n", mpi.rank);
+        // printf("%d nut OK\n", mpi.rank);
 
         calc_divergence(
             cfd.JU, cfd.div,
@@ -1594,12 +1594,12 @@ struct Solver {
             &mpi
         );
 
-        printf("%d div OK\n", mpi.rank);
+        // printf("%d div OK\n", mpi.rank);
 
         Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
 
-        printf("%d ||div|| OK\n", mpi.rank);
+        // printf("%d ||div|| OK\n", mpi.rank);
         if (mpi.rank == 0) {
             printf("SETUP INFO\n");
             printf("\tpath %s\n", path.c_str());
@@ -1659,8 +1659,8 @@ struct Solver {
             ofstream part_output(output_prefix + "_partition.json");
             part_output << setw(2) << part_json;
             part_output.close();
+            fflush(stdout);
         }
-        fflush(stdout);
         MPI_Barrier(MPI_COMM_WORLD);
         for (Int rank = 0; rank < mpi.size; rank ++) {
             if (mpi.rank == rank) {
@@ -1669,6 +1669,7 @@ struct Solver {
                 printf("\toffset = (%ld %ld %ld)\n", offset[0], offset[1], offset[2]);
                 printf("\tGPU id = %d\n", gpu_id);
             }
+            fflush(stdout);
             MPI_Barrier(MPI_COMM_WORLD);
         }
     }
@@ -1832,7 +1833,7 @@ int main(int argc, char *argv[]) {
 //     //     solver.size, solver.gc
 //     // );
 
-    for (; solver.rt.step < Int(100/solver.rt.dt);) {
+    for (; solver.rt.step < solver.rt.max_step;) {
         solver.main_loop_once();
     }    
 
