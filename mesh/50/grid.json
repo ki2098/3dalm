@@ -13,18 +13,18 @@
 			{
 				"Label": "Equal_x_01",
 				"Begin": -10,
-				"End": 15,
-				"Division": 1250
+				"End": 20,
+				"Division": 1500
 			}
 		],
 		"Stretch": [
 			{
 				"Label": "Stretch_y_02",
-				"Begin": 15,
+				"Begin": 20,
 				"End": 20,
 				"Begin_width": 0.02,
 				"End_width": 0.2,
-				"Division":50
+				"Division":0
 			}
 		]
 	},
@@ -67,9 +67,9 @@
 				"Label": "Stretch_z_01",
 				"Begin": 0,
 				"End": 0.454,
-				"Begin_width": 0.01,
+				"Begin_width": 0.001,
 				"End_width": 0.02,
-				"Division": 35
+				"Division": 50
 			},
 			{
 				"Label": "Stretch_z_02",

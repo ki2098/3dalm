@@ -187,20 +187,20 @@ static void calc_intermediate_U(
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(gc        , 0, 0, size);
         Int recv_head_id = index(gc - thick, 0, 0, size);
-#pragma acc host_data use_device(U)
-        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
-#pragma acc host_data use_device(U)
-        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+#pragma acc host_data use_device(Uold)
+        MPI_Isend(Uold[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(Uold)
+        MPI_Irecv(Uold[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
     }
     /** exchange x+ */
     if (mpi->rank < mpi->size - 1) {
         Int count = thick*size[1]*size[2];
         Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
         Int recv_head_id = index(size[0] - gc        , 0, 0, size);
-#pragma acc host_data use_device(U)
-        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
-#pragma acc host_data use_device(U)
-        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
+#pragma acc host_data use_device(Uold)
+        MPI_Isend(Uold[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(Uold)
+        MPI_Irecv(Uold[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
     /** wait x- */
     if (mpi->rank > 0) {

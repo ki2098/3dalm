@@ -180,10 +180,12 @@ delete(U[:len], Uold[:len], JU[:len], p[:len], nut[:len], div[:len])
 struct Eq {
     Real (*A)[7];
     Real *b, *r;
+    Real *r0, *p, *pp, *q, *s, *ss, *t, *tmp;
     Int it, max_it;
     Real err, tol;
     Real max_diag;
     Real relax_rate = 1.2;
+    Int pc_max_it = 4;
 
     void initialize(Int max_it, Real tol, Int size[3]) {
         this->max_it = max_it;
@@ -193,9 +195,18 @@ struct Eq {
         A = new Real[len][7];
         b = new Real[len];
         r = new Real[len];
+        r0 = new Real[len];
+        p = new Real[len];
+        pp = new Real[len];
+        q = new Real[len];
+        s = new Real[len];
+        ss = new Real[len];
+        t = new Real[len];
+        tmp = new Real[len];
 
 #pragma acc enter data \
-create(A[:len], b[:len], r[:len])
+create(A[:len], b[:len], r[:len]) \
+create(r0[:len], p[:len], pp[:len], q[:len], s[:len], ss[:len], t[:len], tmp[:len])
 
         // printf("EQ INFO\n");
         // printf("\tmax iteration = %ld\n", this->max_it);
@@ -206,10 +217,19 @@ create(A[:len], b[:len], r[:len])
         delete[] A;
         delete[] b;
         delete[] r;
+        delete[] r0;
+        delete[] p;
+        delete[] pp;
+        delete[] q;
+        delete[] s;
+        delete[] ss;
+        delete[] t;
+        delete[] tmp;
 
         Int len = size[0]*size[1]*size[2];
 #pragma acc exit data \
-delete(A[:len], b[:len], r[:len])
+delete(A[:len], b[:len], r[:len]) \
+delete(r0[:len], p[:len], pp[:len], q[:len], s[:len], ss[:len], t[:len], tmp[:len])
     }
 };
 
@@ -278,7 +298,7 @@ struct Solver {
             eq.A,
             mesh.x, mesh.y, mesh.z,
             mesh.dx, mesh.dy, mesh.dz,
-            size, gc,
+            gsize, size, offset, gc,
             &mpi
         );
 
@@ -477,6 +497,14 @@ struct Solver {
             gsize, size, offset, gc,
             &mpi
         );
+
+        // run_pbicgstab(
+        //     eq.A, cfd.p, eq.b, eq.r,
+        //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
+        //     eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
+        //     gsize, size, gc,
+        //     &mpi
+        // );
 
         // printf("4\n");
 
