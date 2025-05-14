@@ -491,20 +491,20 @@ struct Solver {
 
         // printf("3\n");
 
-        // run_sor(
-        //     eq.A, cfd.p, eq.b, eq.r,
-        //     eq.relax_rate, eq.it, eq.max_it, eq.err, eq.tol,
-        //     gsize, size, offset, gc,
-        //     &mpi
-        // );
-
-        run_pbicgstab(
+        run_sor(
             eq.A, cfd.p, eq.b, eq.r,
-            eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
-            eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
-            gsize, size, gc,
+            eq.relax_rate, eq.it, eq.max_it, eq.err, eq.tol,
+            gsize, size, offset, gc,
             &mpi
         );
+
+        // run_pbicgstab(
+        //     eq.A, cfd.p, eq.b, eq.r,
+        //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
+        //     eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
+        //     gsize, size, gc,
+        //     &mpi
+        // );
 
         // printf("4\n");
 
