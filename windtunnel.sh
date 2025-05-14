@@ -5,9 +5,9 @@
 #PJM --mpi proc=1
 #PJM -L elapse=3:00:00
 #PJM -j
-#PJM -o windtunnel_mpi.log
+#PJM -o windtunnel.log
 
 module load nvidia
 module load nvompi
 
-mpiexec -n 1 -display-map bin/windtunnel_mpi plain_windtunnel_gk.json
+mpiexec -n 1 -display-map bin/windtunnel plain_windtunnel_gk.json
