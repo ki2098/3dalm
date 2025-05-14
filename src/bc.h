@@ -298,22 +298,25 @@ present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
-        Int ki  = gc;
-        Int kii = gc + 1;
-        Int ko  = gc - 1;
-        Int idi  = index(i, j, ki , size);
-        Int idii = index(i, j, kii, size);
-        Int ido  = index(i, j, ko , size);
-        Real w0 = 0;
-        Real w1 = U[idi ][2];
-        Real w2 = U[idii][2];
-        Real h1 = 0.5*dz[ki ];
-        Real h2 = 0.5*dz[kii] + dz[ki];
-        Real ddwdzz = 
-            (2*(h1 - h2)*w0 + 2*h2*w1 - 2*h1*w2)
-            /(h1*h1*h2 - h1*h2*h2);
-        Real dpdz = (1/Re + nut[idi])*ddwdzz;
-        p[ido] = p[idi] - dpdz*(z[ki] - z[ko]);
+        Int ki = gc;
+        Int ko = gc - 1;
+        p[index(i, j, ko, size)] = p[index(i, j, ki, size)];
+        // Int ki  = gc;
+        // Int kii = gc + 1;
+        // Int ko  = gc - 1;
+        // Int idi  = index(i, j, ki , size);
+        // Int idii = index(i, j, kii, size);
+        // Int ido  = index(i, j, ko , size);
+        // Real w0 = 0;
+        // Real w1 = U[idi ][2];
+        // Real w2 = U[idii][2];
+        // Real h1 = 0.5*dz[ki ];
+        // Real h2 = 0.5*dz[kii] + dz[ki];
+        // Real ddwdzz = 
+        //     (2*(h1 - h2)*w0 + 2*h2*w1 - 2*h1*w2)
+        //     /(h1*h1*h2 - h1*h2*h2);
+        // Real dpdz = (1/Re + nut[idi])*ddwdzz;
+        // p[ido] = p[idi] - dpdz*(z[ki] - z[ko]);
     }}
     // printf("z-\n");
 

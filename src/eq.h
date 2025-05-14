@@ -298,12 +298,12 @@ reduction(max:max_diag)
         Real at = (k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.;
         Real ab = (k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.;
         Real ac = - (
-            (                                     1./(dxc*dxec)     )
-        +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.)
-        +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.)
-        +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.)
-        +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.)
-        +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.)
+            ((i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 2./(dxc*dxc))
+        +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.          )
+        +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.          )
+        +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.          )
+        +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.          )
+        +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.          )
         );
         A[id][0] = ac;
         A[id][1] = ae;
