@@ -1,10 +1,7 @@
-flags = -O2 -Wall
+flags = -Wall
 
 windtunnel:
-	nvc++ -acc -Minfo=accel $(flags) src/windtunnel.cpp -o bin/windtunnel > make.log 2>&1
-
-windtunnel2:
-	nvc++ -acc -Minfo=accel $(flags) src/windtunnel2.cpp -o bin/windtunnel2 > make.log 2>&1
+	mpic++ -acc -Minfo $(flags) src/windtunnel.cpp -o bin/windtunnel > make.log 2>&1
 
 windtunnel_mpi:
 	mpic++ -acc -Minfo $(flags) src/windtunnel_mpi.cpp -o bin/windtunnel_mpi > make.log 2>&1
