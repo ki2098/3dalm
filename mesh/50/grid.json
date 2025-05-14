@@ -13,18 +13,18 @@
 			{
 				"Label": "Equal_x_01",
 				"Begin": -10,
-				"End": 20,
-				"Division": 1500
+				"End": 15,
+				"Division": 1250
 			}
 		],
 		"Stretch": [
 			{
 				"Label": "Stretch_y_02",
-				"Begin": 20,
+				"Begin": 15,
 				"End": 20,
 				"Begin_width": 0.02,
-				"End_width": 0.1,
-				"Division":0
+				"End_width": 0.05,
+				"Division":120
 			}
 		]
 	},
@@ -45,7 +45,7 @@
 				"End": -2,
 				"Begin_width": 0.05,
 				"End_width": 0.02,
-				"Division": 45
+				"Division":40
 			},
 			{
 				"Label": "Stretch_y_02",
@@ -53,7 +53,7 @@
 				"End": 3.6,
 				"Begin_width": 0.02,
 				"End_width": 0.05,
-				"Division":45
+				"Division":40
 			}
 		]
 	},

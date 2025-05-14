@@ -284,27 +284,27 @@ reduction(max:max_diag)
         Real dycs = y[j    ] - y[j - 1];
         Real dztc = z[k + 1] - z[k    ];
         Real dzcb = z[k    ] - z[k - 1];
-        Real ae = 1/(dxc*dxec);
-        Real aw = 1/(dxc*dxcw);
-        Real an = 1/(dyc*dync);
-        Real as = 1/(dyc*dycs);
-        Real at = 1/(dzc*dztc);
-        Real ab = 1/(dzc*dzcb);
-        Real ac = - (ae + aw + an + as + at + ab);
-        // Real ae = (i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 0.;
-        // Real aw = (i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.;
-        // Real an = (j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.;
-        // Real as = (j + offset[1] > gc               )? 1./(dyc*dycs) : 0.;
-        // Real at = (k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.;
-        // Real ab = (k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.;
-        // Real ac = - (
-        //     ((i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 2./(dxc*dxc))
-        // +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.          )
-        // +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.          )
-        // +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.          )
-        // +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.          )
-        // +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.          )
-        // );
+        // Real ae = 1/(dxc*dxec);
+        // Real aw = 1/(dxc*dxcw);
+        // Real an = 1/(dyc*dync);
+        // Real as = 1/(dyc*dycs);
+        // Real at = 1/(dzc*dztc);
+        // Real ab = 1/(dzc*dzcb);
+        // Real ac = - (ae + aw + an + as + at + ab);
+        Real ae = (i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 0.;
+        Real aw = (i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.;
+        Real an = (j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.;
+        Real as = (j + offset[1] > gc               )? 1./(dyc*dycs) : 0.;
+        Real at = (k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.;
+        Real ab = (k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.;
+        Real ac = - (
+            ((i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 2./(dxc*dxc))
+        +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.          )
+        +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.          )
+        +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.          )
+        +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.          )
+        +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.          )
+        );
         A[id][0] = ac;
         A[id][1] = ae;
         A[id][2] = aw;
