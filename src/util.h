@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <cmath>
 #include "type.h"
 
 #pragma acc routine seq
@@ -68,4 +69,12 @@ std::string to_string_fixed_length(T value, Int len, char fill_char = '0') {
     std::stringstream ss;
     ss << std::setw(len) << std::setfill(fill_char) << value;
     return ss.str();
+}
+
+static Real get_intersection(Real h1, Real t1, Real h2, Real t2) {
+    Real l1 = t1 - h1;
+    Real l2 = t2 - h2;
+    Real x1 = t1 - h2;
+    Real x2 = t2 - h1;
+    return fmax(0., fmin(l1, fmin(l2, fmin(x1, x2))));
 }

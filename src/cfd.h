@@ -654,3 +654,22 @@ reduction(max:max_cfl)
 
     return max_cfl;
 }
+
+static void set_solid_U(
+    Real U[][3], Real solid[],
+    Int size[3], Int gc
+) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], solid[:len]) \
+copyin(size[:3])
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int id = index(i, j, k, size);
+#pragma acc loop seq
+        for (Int m = 0; m < 3; m ++) {
+            U[id][m] = (1. - solid[id])*U[id][m];
+        }
+    }}}
+}

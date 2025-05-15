@@ -8,6 +8,12 @@
         "prefix":"data/plain_windtunnel"
     },
 
+    "turbulence_grid":{
+        "thickness":0.1,
+        "spacing":1,
+        "placement":-8
+    },
+
     "mesh":{
         "path":"mesh/20"
     },

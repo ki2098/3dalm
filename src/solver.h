@@ -35,6 +35,59 @@ static void calc_partition(
     }
 }
 
+static void set_turbulence_generating_grid(
+    Real solid[],
+    Real x[], Real y[], Real z[],
+    Real dx[], Real dy[], Real dz[],
+    Real thickness, Real spacing, Real placement,
+    Int size[3], Int gc
+) {
+/** CONTINUE FROM HERE... */
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Real xc = x[i];
+        Real yc = y[j];
+        Real zc = z[k];
+        Real dxc = dx[i];
+        Real dyc = dy[j];
+        Real dzc = dz[k];
+        Real x_intersection = get_intersection(
+            xc - 0.5*dxc,
+            xc + 0.5*dxc,
+            placement - 0.5*thickness,
+            placement + 0.5*thickness
+        );
+        Real y_dist = fabs(yc);
+        Real z_dist = fabs(zc);
+
+        Int bar_j_nearest = lround(y_dist/spacing);
+        Real bar_y = bar_j_nearest*spacing;
+        Real y_intersection = get_intersection(
+            yc - 0.5*dyc,
+            yc + 0.5*dyc,
+            bar_y - 0.5*thickness,
+            bar_y + 0.5*thickness
+        );
+
+        Int bar_k_nearest = lround(z_dist/spacing);
+        Real bar_z = bar_k_nearest*spacing;
+        Real z_intersection = get_intersection(
+            zc - 0.5*dzc,
+            zc + 0.5*dzc,
+            bar_z - 0.5*thickness,
+            bar_z + 0.5*thickness
+        );
+
+        Real yz_cross = y_intersection*z_intersection;
+        Real occupied = 
+            (y_intersection*dzc + z_intersection*dyc - yz_cross)
+            *x_intersection;
+        
+        solid[index(i, j, k, size)] = occupied/(dxc*dyc*dzc);
+    }}}
+}
+
 struct Runtime {
     Int step = 0, max_step;
     Real dt;
@@ -134,7 +187,7 @@ delete(dx[:size[0]], dy[:size[1]], dz[:size[2]])
 struct Cfd {
     Real (*U)[3], (*Uold)[3];
     Real (*JU)[3];
-    Real *p, *nut, *div;
+    Real *p, *nut, *div, *solid;
     Real Uin[3];
     Real Re, Cs;
     Real avg_div, max_cfl;
@@ -153,9 +206,10 @@ struct Cfd {
         p = new Real[len];
         nut = new Real[len];
         div = new Real[len];
+        solid = new Real[len];
 
 #pragma acc enter data \
-create(U[:len], Uold[:len], JU[:len], p[:len], nut[:len], div[:len])
+create(U[:len], Uold[:len], JU[:len], p[:len], nut[:len], div[:len], solid[:len])
 
         // printf("CFD INFO\n");
         // printf("\tRe = %lf\n", this->Re);
@@ -170,10 +224,11 @@ create(U[:len], Uold[:len], JU[:len], p[:len], nut[:len], div[:len])
         delete[] p;
         delete[] nut;
         delete[] div;
+        delete[] solid;
 
         Int len = size[0]*size[1]*size[2];
 #pragma acc exit data \
-delete(U[:len], Uold[:len], JU[:len], p[:len], nut[:len], div[:len])
+delete(U[:len], Uold[:len], JU[:len], p[:len], nut[:len], div[:len], solid[:len])
     }
 };
 
@@ -267,6 +322,11 @@ struct Solver {
 
         auto &output_json = setup_json["output"];
         output_prefix = output_json["prefix"];
+
+        auto &tgg_json = setup_json["turbulence_grid"];
+        Real tgg_thickness = tgg_json["thickness"];
+        Real tgg_spacing = tgg_json["spacing"];
+        Real tgg_placement = tgg_json["placement"];
 
         auto &mesh_json = setup_json["mesh"];
         std::string mesh_path = mesh_json["path"];
@@ -380,6 +440,11 @@ struct Solver {
 
             printf("OUTPUT INFO\n");
             printf("\tprefix = %s\n", output_prefix.c_str());
+
+            printf("TURBULENCE GENERATING GRID INFO\n");
+            printf("\tthickness = %lf\n", tgg_thickness);
+            printf("\tspacing = %lf\n", tgg_spacing);
+            printf("\tplacement = %lf\n", tgg_placement);
 
             printf("CFD INFO\n");
             printf("\tRe = %lf\n", cfd.Re);
