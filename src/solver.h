@@ -592,6 +592,14 @@ struct Solver {
             &mpi
         );
 
+        // run_pbicgstab(
+        //     eq.A, cfd.p, eq.b, eq.r,
+        //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t,
+        //     eq.it, eq.max_it, eq.err, eq.tol, eq.relax_rate, eq.pc_max_it,
+        //     gsize, size, offset, gc,
+        //     &mpi
+        // );
+
         // printf("4\n");
 
         apply_pbc(

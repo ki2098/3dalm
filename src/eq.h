@@ -172,9 +172,21 @@ static void run_sor(
     } while (it < max_it && err > tol);
 }
 
+static void run_sor_pc(
+    Real A[][7], Real x[], Real b[],
+    Real pc_relax_rate, Int pc_max_it,
+    Int size[3], Int offset[3], Int gc,
+    MpiInfo *mpi
+) {
+    for (Int it = 0; it < pc_max_it; it ++) {
+        sweep_sor(A, x, b, pc_relax_rate, 0, size, offset, gc, mpi);
+        sweep_sor(A, x, b, pc_relax_rate, 1, size, offset, gc, mpi);
+    }
+}
+
 static void run_jacobi_pc(
     Real A[][7], Real x[], Real xold[], Real b[],
-    Real pc_max_it,
+    Int pc_max_it,
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
@@ -233,6 +245,79 @@ present(s[:len], r[:len], q[:len])
 
         fill_array(ss, 0., len);
         run_jacobi_pc(A, ss, tmp, s, pc_max_it, size, gc, mpi);
+        calc_Ax(A, ss, t, size, gc, mpi);
+
+        omega = calc_inner_product(t, s, size, gc, mpi)/calc_inner_product(t, t, size, gc, mpi);
+
+#pragma acc kernels loop independent \
+present(x[:len], pp[:len], ss[:len])
+        for (Int i = 0; i < len; i ++) {
+            x[i] = x[i] + alpha*pp[i] + omega*ss[i];
+        }
+
+#pragma acc kernels loop independent \
+present(r[:len], s[:len], t[:len])
+        for (Int i = 0; i < len; i ++) {
+            r[i] = s[i] - omega*t[i];
+        }
+
+        rhoold = rho;
+
+        err = calc_l2_norm(r, size, gc, mpi)/sqrt(effective_count);
+        it ++;
+    } while (it < max_it && err > tol);
+}
+
+static void run_pbicgstab(
+    Real A[][7], Real x[], Real b[], Real r[], Real r0[],
+    Real p[], Real pp[], Real q[], Real s[], Real ss[], Real t[],
+    Int &it, Int max_it, Real &err, Real tol, Real pc_relax_rate, Int pc_max_it,
+    Int gsize[3], Int size[3], Int offset[3], Int gc,
+    MpiInfo *mpi
+) {
+    Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
+    Int len = size[0]*size[1]*size[2];
+    calc_residual(A, x, b, r, size, gc, mpi);
+    cpy_array(r0, r, len);
+    Real alpha = 1, beta, omega = 1, rho, rhoold = 1;
+    fill_array(q, 0., len);
+
+    it = 0;
+    do {
+        rho = calc_inner_product(r0, r, size, gc, mpi);
+        if (rho < FLT_MIN) {
+            err = rho;
+            break;
+        }
+
+        if (it == 0) {
+            cpy_array(p, r, len);
+        } else {
+            beta = (rho/rhoold)*(alpha/omega);
+
+#pragma acc kernels loop independent \
+present(p[:len], r[:len], q[:len])
+            for (Int i = 0; i < len; i ++) {
+                p[i] = r[i] + beta*(p[i] - omega*q[i]);
+            }
+        }
+
+        fill_array(pp, 0., len);
+        // run_jacobi_pc(A, pp, tmp, p, pc_max_it, size, gc, mpi);
+        run_sor_pc(A, pp, p, pc_relax_rate, pc_max_it, size, offset, gc, mpi);
+        calc_Ax(A, pp, q, size, gc, mpi);
+
+        alpha = rho/calc_inner_product(r0, q, size, gc, mpi);
+
+#pragma acc kernels loop independent \
+present(s[:len], r[:len], q[:len])
+        for (Int i = 0; i < len; i ++) {
+            s[i] = r[i] - alpha*q[i];
+        }
+
+        fill_array(ss, 0., len);
+        // run_jacobi_pc(A, ss, tmp, s, pc_max_it, size, gc, mpi);
+        run_sor_pc(A, ss, s, pc_relax_rate, pc_max_it, size, offset, gc, mpi);
         calc_Ax(A, ss, t, size, gc, mpi);
 
         omega = calc_inner_product(t, s, size, gc, mpi)/calc_inner_product(t, t, size, gc, mpi);
