@@ -7,7 +7,6 @@ int main(int argc, char *argv[]) {
     Solver solver;
     string setup_path(argv[1]);
     solver.initialize(setup_path);
-    Int *size = solver.size;
 
     OutHandler ohandler;
     ohandler.set_size(solver.size, solver.gc);

@@ -1,4 +1,4 @@
-flags = -Wall
+flags = -Wall -fast
 
 windtunnel:
 	mpic++ -acc -Minfo $(flags) src/windtunnel.cpp -o bin/windtunnel > make.log 2>&1
