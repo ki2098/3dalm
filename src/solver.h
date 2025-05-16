@@ -248,7 +248,7 @@ struct Eq {
     Real err, tol;
     Real max_diag;
     Real relax_rate = 1.2;
-    Int pc_max_it = 3;
+    Int pc_max_it = 5;
 
     void initialize(Int max_it, Real tol, Int size[3]) {
         this->max_it = max_it;
