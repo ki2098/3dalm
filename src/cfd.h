@@ -591,6 +591,76 @@ copyin(size[:3])
     }}}
 }
 
+static void calc_q(
+    Real U[][3], Real q[],
+    Real x[], Real y[], Real z[],
+    Int size[3], Int gc,
+    MpiInfo *mpi
+) {
+    MPI_Request req[4];
+    const Int thick = 1;
+    /** exchange x- */
+    if (mpi->rank > 0) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(gc        , 0, 0, size);
+        Int recv_head_id = index(gc - thick, 0, 0, size);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[0]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank - 1, 0, MPI_COMM_WORLD, &req[1]);
+    }
+    /** exchange x+ */
+    if (mpi->rank < mpi->size - 1) {
+        Int count = thick*size[1]*size[2];
+        Int send_head_id = index(size[0] - gc - thick, 0, 0, size);
+        Int recv_head_id = index(size[0] - gc        , 0, 0, size);
+#pragma acc host_data use_device(U)
+        MPI_Isend(U[send_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[2]);
+#pragma acc host_data use_device(U)
+        MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
+    }
+    /** wait x- */
+    if (mpi->rank > 0) {
+        MPI_Wait(&req[0], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[1], MPI_STATUS_IGNORE);
+    }
+    /** wait x+ */
+    if (mpi->rank < mpi->size - 1) {
+        MPI_Wait(&req[2], MPI_STATUS_IGNORE);
+        MPI_Wait(&req[3], MPI_STATUS_IGNORE);
+    }
+
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], q[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int idc = index(i, j, k, size);
+        Int ide = index(i + 1, j, k, size);
+        Int idw = index(i - 1, j, k, size);
+        Int idn = index(i, j + 1, k, size);
+        Int ids = index(i, j - 1, k, size);
+        Int idt = index(i, j, k + 1, size);
+        Int idb = index(i, j, k - 1, size);
+        Real dxew = x[i + 1] - x[i - 1];
+        Real dyns = y[j + 1] - y[j - 1];
+        Real dztb = z[k + 1] - z[k - 1];
+        Real dudx = (U[ide][0] - U[idw][0])/dxew;
+        Real dudy = (U[idn][0] - U[ids][0])/dyns;
+        Real dudz = (U[idt][0] - U[idb][0])/dztb;
+        Real dvdx = (U[ide][1] - U[idw][1])/dxew;
+        Real dvdy = (U[idn][1] - U[ids][1])/dyns;
+        Real dvdz = (U[idt][1] - U[idb][1])/dztb;
+        Real dwdx = (U[ide][2] - U[idw][2])/dxew;
+        Real dwdy = (U[idn][2] - U[ids][2])/dyns;
+        Real dwdz = (U[idt][2] - U[idb][2])/dztb;
+        q[idc] = - 0.5*(dudx*dudx + dvdy*dvdy + dwdz*dwdz + 2*(dudy*dvdx + dudz*dwdx + dvdz*dwdy));
+    }}}
+}
+
 static void calc_divergence(
     Real JU[][3], Real div[],
     Real dx[], Real dy[], Real dz[],

@@ -71,6 +71,7 @@ std::string to_string_fixed_length(T value, Int len, char fill_char = '0') {
     return ss.str();
 }
 
+#pragma acc routine seq
 static Real get_intersection(Real h1, Real t1, Real h2, Real t2) {
     Real l1 = t1 - h1;
     Real l2 = t2 - h2;

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstdio>
 #include <vector>
+#include <cassert>
 #include "util.h"
 #include "json.hpp"
 
@@ -56,6 +57,40 @@ struct Header {
             std::string s(len, '\0');
             ifs.read((char*)s.c_str(), len*sizeof(char));
             var_name[v] = s;
+        }
+    }
+};
+
+struct OutHandler : public Header {
+    std::vector<Real*> var;
+
+    void set_size(Int size[3], Int gc) {
+        this->size[0] = size[0];
+        this->size[1] = size[1];
+        this->size[2] = size[2];
+        this->gc = gc;
+    }
+
+    void set_var(
+        const std::vector<Real*> &var,
+        const std::vector<Int> &var_dim,
+        const std::vector<std::string> &var_name
+    ) {
+        this->var_count = var.size();
+        this->var = var;
+        this->var_dim = var_dim;
+        this->var_name = var_name;
+        assert(
+            var_dim.size() == var_count &&
+            var_name.size() == var_count
+        );
+    }
+
+    void update_host() {
+        for (Int v = 0; v < var_count; v ++) {
+            Real *ptr = var[v];
+            Int len = size[0]*size[1]*size[2]*var_dim[v];
+#pragma acc update host(ptr[:len])
         }
     }
 };
@@ -171,15 +206,15 @@ static void write_mesh(
 
 static void write_csv(
     std::string path,
-    Header *header,
-    Real *var[], Real x[], Real y[], Real z[]
+    OutHandler *handler, Real x[], Real y[], Real z[]
 ) {
     std::ofstream ocsv(path);
 
-    Int var_count = header->var_count;
-    auto &var_dim = header->var_dim;
-    auto &var_name = header->var_name;
-    auto size = header->size;
+    Int var_count = handler->var_count;
+    auto &var_dim = handler->var_dim;
+    auto &var_name = handler->var_name;
+    auto &var = handler->var;
+    auto size = handler->size;
 
     ocsv << "x,y,z";
     for (Int v = 0; v < var_count; v ++) {
@@ -209,17 +244,17 @@ static void write_csv(
 
 static void write_binary(
     std::string path,
-    Header *header,
-    Real **var, Real *x, Real *y, Real *z
+    OutHandler *handler, Real *x, Real *y, Real *z
 ) {
-    auto size = header->size;
+    auto size = handler->size;
     std::ofstream ofs(path, std::ios::binary);
-    header->write(ofs);
+    handler->write(ofs);
     ofs.write((char*)x, size[0]*sizeof(Real));
     ofs.write((char*)y, size[1]*sizeof(Real));
     ofs.write((char*)z, size[2]*sizeof(Real));
-    Int var_count = header->var_count;
-    auto &var_dim = header->var_dim;
+    Int var_count = handler->var_count;
+    auto &var_dim = handler->var_dim;
+    auto &var = handler->var;
     for (Int v = 0; v < var_count; v ++) {
         Int count = size[0]*size[1]*size[2]*var_dim[v];
         ofs.write((char*)var[v], count*sizeof(Real));

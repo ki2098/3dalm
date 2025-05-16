@@ -67,9 +67,9 @@
 				"Label": "Stretch_z_01",
 				"Begin": 0,
 				"End": 0.454,
-				"Begin_width": 0.0015,
+				"Begin_width": 0.002,
 				"End_width": 0.02,
-				"Division": 50
+				"Division": 45
 			},
 			{
 				"Label": "Stretch_z_02",
