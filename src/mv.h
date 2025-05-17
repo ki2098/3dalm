@@ -199,3 +199,29 @@ copyin(size[:3])
         y[idc] = ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb;
     }}}
 }
+
+static void calc_ax_plus_by(
+    Real a, Real x[], Real b, Real y[], Real z[],
+    Int len
+) {
+#pragma acc kernels loop independent \
+present(x[:len], y[:len], z[:len])
+    for (Int i = 0; i < len; i ++) {
+        z[i] = a*x[i] + b*y[i];
+    }
+}
+
+template<Int N>
+void calc_ax_plus_by(
+    Real a, Real x[][N], Real b, Real y[][N], Real z[][N],
+    Int len
+) {
+#pragma acc kernels loop independent \
+present(x[:len], y[:len], z[:len])
+    for (Int i = 0; i < len; i ++) {
+#pragma acc loop seq
+        for (Int m = 0; m < N; m ++) {
+            z[i][m] = a*x[i][m] + b*y[i][m];
+        }
+    }
+}

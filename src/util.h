@@ -31,6 +31,7 @@ void cpy_array(T dst[][N], T src[][N], Int len) {
 #pragma acc kernels loop independent \
 present(dst[:len], src[:len])
     for (Int i = 0; i < len; i ++) {
+#pragma acc loop seq
         for (Int m = 0; m < N; m ++) {
             dst[i][m] = src[i][m];
         }
@@ -52,6 +53,7 @@ void fill_array(T dst[][N], T value[N], Int len) {
 present(dst[:len]) \
 copyin(value[:N])
     for (Int i = 0; i < len; i ++) {
+#pragma acc loop seq
         for (Int m = 0; m < N; m ++) {
             dst[i][m] = value[m];
         }

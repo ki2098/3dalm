@@ -97,6 +97,9 @@ copyin(size[:3])
 struct Runtime {
     Int step = 0, max_step;
     Real dt;
+    Int output_start_step;
+    Int output_interval_step;
+    Int tavg_start_step;
 
     Real get_time() {
         return dt*step;
@@ -191,7 +194,7 @@ delete(dx[:size[0]], dy[:size[1]], dz[:size[2]])
 };
 
 struct Cfd {
-    Real (*U)[3], (*Uold)[3];
+    Real (*U)[3], (*Uold)[3], (*Utavg)[3];
     Real (*JU)[3];
     Real *p, *nut, *q, *div, *solid;
     Real Uin[3];
@@ -208,6 +211,7 @@ struct Cfd {
         Int len = size[0]*size[1]*size[2];
         U = new Real[len][3];
         Uold = new Real[len][3];
+        Utavg = new Real[len][3];
         JU = new Real[len][3];
         p = new Real[len];
         nut = new Real[len];
@@ -216,7 +220,7 @@ struct Cfd {
         solid = new Real[len];
 
 #pragma acc enter data \
-create(U[:len], Uold[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len])
+create(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len])
 
         // printf("CFD INFO\n");
         // printf("\tRe = %lf\n", this->Re);
@@ -227,6 +231,7 @@ create(U[:len], Uold[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], so
     void finalize(Int size[3]) {
         delete[] U;
         delete[] Uold;
+        delete[] Utavg;
         delete[] JU;
         delete[] p;
         delete[] nut;
@@ -236,7 +241,7 @@ create(U[:len], Uold[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], so
 
         Int len = size[0]*size[1]*size[2];
 #pragma acc exit data \
-delete(U[:len], Uold[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len])
+delete(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len])
     }
 };
 
@@ -312,9 +317,14 @@ struct Solver {
     json snapshot_json = {};
     std::string output_prefix;
 
-    void initialize(std::string path) {
+    OutHandler out_handler, tavg_out_handler;
+
+    void initialize(int argc, char **argv) {
+        MPI_Init(&argc, &argv);
         MPI_Comm_size(MPI_COMM_WORLD, &mpi.size);
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
+
+        std::string path(argv[1]);
 
         int gpu_count = acc_get_num_devices(acc_device_nvidia);
         int gpu_id = mpi.rank%gpu_count;
@@ -330,6 +340,12 @@ struct Solver {
 
         auto &output_json = setup_json["output"];
         output_prefix = output_json["prefix"];
+        Real output_start_time = output_json["output_start_time"];
+        Real output_interval_time = output_json["output_interval_time"];
+        Real tavg_start_time = output_json["time_avg_start_time"];
+        rt.output_start_step = output_start_time/rt.dt;
+        rt.output_interval_step = output_interval_time/rt.dt;
+        rt.tavg_start_step = tavg_start_time/rt.dt;
 
         auto &tgg_json = setup_json["turbulence_grid"];
         Real tgg_thickness = tgg_json["thickness"];
@@ -442,6 +458,20 @@ struct Solver {
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
         cfd.max_cfl = calc_max_cfl(cfd.U, mesh.dx, mesh.dy, mesh.dz, rt.dt, size, gc, &mpi);
 
+        out_handler.set_size(size, gc);
+        out_handler.set_var(
+            {cfd.U[0], cfd.p, cfd.div, cfd.q},
+            {3, 1, 1, 1},
+            {"U", "p", "div", "q"}
+        );
+
+        tavg_out_handler.set_size(size, gc);
+        tavg_out_handler.set_var(
+            {cfd.Utavg[0]},
+            {3},
+            {"U"}
+        );
+
         // printf("%d ||div|| OK\n", mpi.rank);
         if (mpi.rank == 0) {
             printf("SETUP INFO\n");
@@ -461,6 +491,19 @@ struct Solver {
 
             printf("OUTPUT INFO\n");
             printf("\tprefix = %s\n", output_prefix.c_str());
+            printf("\toutput start step = %ld\n", rt.output_start_step);
+            printf("\toutput interval step = %ld\n", rt.output_interval_step);
+            printf("\ttime avg start step = %ld\n", rt.tavg_start_step);
+            printf("\toutput vars =");
+            for (auto &v : out_handler.var_name) {
+                printf(" %s", v.c_str());
+            }
+            printf("\n");
+            printf("\ttime avg vars =");
+            for (auto &v : tavg_out_handler.var_name) {
+                printf(" %s", v.c_str());
+            }
+            printf("\n");
 
             printf("TURBULENCE GENERATING GRID INFO\n");
             printf("\tthickness = %lf\n", tgg_thickness);
@@ -533,10 +576,16 @@ struct Solver {
         mesh.finalize(size);
         cfd.finalize(size);
         eq.finalize(size);
+        MPI_Finalize();
     }
 
     void main_loop_once() {
         Int len = size[0]*size[1]*size[2];
+        Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
+        
+        if (rt.step == 0) {
+            goto SKIP_TIME_INTEGRAL;
+        }
 
         cpy_array(cfd.Uold, cfd.U, len);
 
@@ -654,6 +703,13 @@ struct Solver {
             &mpi
         );
 
+        calc_q(
+            cfd.U, cfd.q,
+            mesh.x, mesh.y, mesh.z,
+            size, gc,
+            &mpi
+        );
+
         calc_divergence(
             cfd.JU, cfd.div,
             mesh.dx, mesh.dy, mesh.dz,
@@ -663,17 +719,62 @@ struct Solver {
 
         // printf("8\n");
 
-        Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
         cfd.avg_div = calc_l2_norm(cfd.div, size, gc, &mpi)/sqrt(effective_count);
 
         cfd.max_cfl = calc_max_cfl(cfd.U, mesh.dx, mesh.dy, mesh.dz, rt.dt, size, gc, &mpi);
 
-        // printf("9\n");
-
-        rt.step ++;
-
         if (mpi.rank == 0) {
             printf("%ld %e %ld %e %e %e\n", rt.step, rt.get_time(), eq.it, eq.err, cfd.avg_div, cfd.max_cfl);
         }
+
+SKIP_TIME_INTEGRAL:
+        // printf("9\n");
+        if (rt.step >= rt.tavg_start_step) {
+            Real weight = 1./(rt.step - rt.tavg_start_step + 1);
+            calc_ax_plus_by(
+                1. - weight, cfd.Utavg,
+                weight, cfd.U,
+                cfd.Utavg,
+                len
+            );
+        }
+
+        if (rt.step >= rt.output_start_step) {
+            if ((rt.step - rt.output_start_step)%rt.output_interval_step == 0) {
+                out_handler.update_host();
+                write_binary(
+                    make_rank_binary_filename(output_prefix, mpi.rank, rt.step),
+                    &out_handler,
+                    mesh.x, mesh.y, mesh.z
+                );
+                json slice_json = {
+                    {"step", rt.step},
+                    {"time", rt.get_time()}
+                };
+
+                if (rt.step >= rt.tavg_start_step) {
+                    tavg_out_handler.update_host();
+                    write_binary(
+                        make_rank_binary_filename(output_prefix + "_tavg", mpi.rank, rt.step),
+                        &tavg_out_handler,
+                        mesh.x, mesh.y, mesh.z
+                    );
+                    slice_json["tavg"] = "yes";
+                }
+                
+                snapshot_json.push_back(slice_json);
+                if (mpi.rank == 0) {
+                    std::ofstream snapshot_output(output_prefix + "_snapshot.json");
+                    snapshot_output << std::setw(2) << snapshot_json;
+                    snapshot_output.close();
+                }
+            }
+        }
+
+        rt.step ++;
+    }
+
+    bool can_continue() {
+        return rt.step <= rt.max_step;
     }
 };
