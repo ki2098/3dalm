@@ -8,7 +8,7 @@
         "prefix":"data/plain_windtunnel",
         "output_start_time":0,
         "output_interval_time":1,
-        "time_avg_start_time":0
+        "time_avg_start_time":5
     },
 
     "turbulence_grid":{

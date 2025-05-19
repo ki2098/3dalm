@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <openacc.h>
 #include "json.hpp"
@@ -324,13 +325,16 @@ struct Solver {
         MPI_Comm_size(MPI_COMM_WORLD, &mpi.size);
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
 
-        std::string path(argv[1]);
+        auto setup_file_path = std::filesystem::canonical(argv[1]);
+        if (setup_file_path.has_parent_path()) {
+            std::filesystem::current_path(setup_file_path.parent_path());
+        }
 
         int gpu_count = acc_get_num_devices(acc_device_nvidia);
         int gpu_id = mpi.rank%gpu_count;
         acc_set_device_num(gpu_id, acc_device_nvidia);
 
-        std::ifstream setup_file(path);
+        std::ifstream setup_file(setup_file_path.filename());
         setup_json = json::parse(setup_file);
 
         auto &rt_json = setup_json["runtime"];
@@ -472,10 +476,10 @@ struct Solver {
             {"U"}
         );
 
-        // printf("%d ||div|| OK\n", mpi.rank);
         if (mpi.rank == 0) {
             printf("SETUP INFO\n");
-            printf("\tpath %s\n", path.c_str());
+            printf("\tsetupfile = %s\n", setup_file_path.string().c_str());
+            printf("\tworking directory = %s\n", std::filesystem::current_path().string().c_str());
 
             printf("DEVICE INFO\n");
             printf("\tnumber of GPUs = %d\n", gpu_count);

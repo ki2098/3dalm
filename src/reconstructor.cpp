@@ -56,11 +56,12 @@ void merge_rank_var(
     }}}
 }
 
-void reconstruct(const json &part_json, const json &snapshot_json, const string &prefix, const string &mesh_path, bool tavg = false) {
+void reconstruct(const json &part_json, const json &snapshot_json, string prefix, const string &mesh_path, bool tavg = false) {
     OutHandler out_handler;
 
     Int peek_step = -1;
     if (tavg) {
+        prefix += "_tavg";
         for (auto &peek : snapshot_json) {
             if (peek.value("tavg", "no") == "yes") {
                 peek_step = peek["step"];
@@ -115,6 +116,10 @@ void reconstruct(const json &part_json, const json &snapshot_json, const string 
     }
 
     for (auto &snapshot : snapshot_json) {
+        if (tavg && snapshot.value("tavg", "no") != "yes") {
+            continue;
+        }
+
         Int step = snapshot["step"];
   
         string result_path = make_binary_filename(prefix, step);
@@ -195,5 +200,5 @@ int main(int argc, char *argv[]) {
     printf("reconstruct instantaneous field files\n");
     reconstruct(part_json, snapshot_json, prefix, mesh_path);
     printf("reconstruct time averaged field files\n");
-    reconstruct(part_json, snapshot_json, prefix + "_tavg", mesh_path, true);
+    reconstruct(part_json, snapshot_json, prefix, mesh_path, true);
 }
