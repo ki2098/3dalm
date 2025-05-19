@@ -743,3 +743,27 @@ copyin(size[:3])
         }
     }}}
 }
+
+static Real calc_avg_monitor_I(
+    Real U[][3], Real Uref[3],
+    Int size[3], Int i, Int gc
+) {
+    Real total = 0;
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(2) \
+present(U[:len]) \
+copyin(size[:3], Uref[:3]) \
+reduction(+:total)
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int id = index(i, j, k, size);
+        Real ufluc = U[id][0] - Uref[0];
+        Real vfluc = U[id][1] - Uref[1];
+        Real wfluc = U[id][2] - Uref[2];
+        Real fluc_rms = sqrt((ufluc*ufluc + vfluc*vfluc + wfluc*wfluc)/3.);
+        total += fluc_rms;
+    }}
+    Real Urefmag = sqrt(Uref[0]*Uref[0] + Uref[1]*Uref[1] + Uref[2]*Uref[2]);
+    Int effective_count = (size[1] - 2*gc)*(size[2] - 2*gc);
+    return total/(Urefmag*effective_count);
+}

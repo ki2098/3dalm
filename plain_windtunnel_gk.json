@@ -17,6 +17,15 @@
         "placement":-8
     },
 
+    "monitor":[
+        {
+            "x":0
+        },
+        {
+            "x":10
+        }
+    ],
+
     "mesh":{
         "path":"mesh/50"
     },

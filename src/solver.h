@@ -302,6 +302,36 @@ delete(r0[:len], p[:len], pp[:len], q[:len], s[:len], ss[:len], t[:len], tmp[:le
     }
 };
 
+struct Monitor {
+    Int i;
+    Real x;
+    Real I = 0;
+    std::ofstream ofs;
+    bool active = false;
+
+    void initialize(
+        std::string path,
+        Int i, Real x
+    ) {
+        ofs.open(path);
+        active = true;
+        this->x = x;
+        this->i = i;
+        ofs << "# x = " << this->x << std::endl;
+        ofs << "t,I" << std::endl;
+    }
+
+    void write(Real t) {
+        ofs << t << "," << I << std::endl;
+    }
+
+    ~Monitor() {
+        if (ofs.is_open()) {
+            ofs.close();
+        }
+    }
+};
+
 struct Solver {
     Int gsize[3];
     Int size[3];
@@ -319,6 +349,8 @@ struct Solver {
     std::string output_prefix;
 
     OutHandler out_handler, tavg_out_handler;
+
+    std::vector<Monitor> monitors;
 
     void initialize(int argc, char **argv) {
         MPI_Init(&argc, &argv);
@@ -381,6 +413,30 @@ struct Solver {
         eq.initialize(max_it, tol, size);
 
         // printf("%d eq OK\n", mpi.rank);
+
+        auto &monitors_json = setup_json["monitor"];
+        monitors = std::vector<Monitor>(monitors_json.size());
+        for (Int m = 0; m < monitors.size(); m ++) {
+            auto &monitor_json = monitors_json[m];
+            Real monitor_x = monitor_json["x"];
+            Real *x = mesh.x;
+
+            for (Int i = gc - 1; i < size[0] - gc; i ++) {
+                if (x[i] <= monitor_x && x[i + 1] > monitor_x) {
+                    Int nearest_i = (
+                        monitor_x - x[i] < x[i + 1] - monitor_x
+                    )? i : i + 1;
+                    if (nearest_i >= gc && nearest_i <= size[0] - gc - 1) {
+                        monitors[m].initialize(
+                            output_prefix + "_monitor" + std::to_string(m) + ".csv",
+                            nearest_i,
+                            x[nearest_i]
+                        );
+                    }
+                    break;
+                }
+            }
+        }
 
         eq.max_diag = build_A(
             eq.A,
@@ -564,8 +620,14 @@ struct Solver {
                 printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
                 printf("\toffset = (%ld %ld %ld)\n", offset[0], offset[1], offset[2]);
                 printf("\tGPU id = %d\n", gpu_id);
+                printf("\tmonitors = \n");
+                for (auto &m : monitors) {
+                    if (m.active) {
+                        printf("\t\tx = %lf, local i = %ld\n", m.x, m.i);
+                    }
+                }
+                fflush(stdout);
             }
-            fflush(stdout);
             MPI_Barrier(MPI_COMM_WORLD);
         }
     }
@@ -744,6 +806,16 @@ SKIP_TIME_INTEGRAL:
         }
 
         if (rt.step >= rt.output_start_step) {
+            for (auto &m : monitors) {
+                if (m.active) {
+                    m.I = calc_avg_monitor_I(
+                        cfd.U, cfd.Uin,
+                        size, m.i, gc
+                    );
+                    m.write(rt.get_time());
+                }
+            }
+            
             if ((rt.step - rt.output_start_step)%rt.output_interval_step == 0) {
                 out_handler.update_host();
                 write_binary(
