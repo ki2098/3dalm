@@ -6,9 +6,9 @@ windtunnel:
 ifeq ($(shell expr $(cxxversion) \< 8), 1)
 	$(error needs gcc version 8 or above)
 else ifeq ($(shell expr $(cxxversion) \= 8), 1)
-	mpic++ src/windtunnel.cpp -o bin/windtunnel --std=c++17 -Wall -acc -Minfo -fast -lstdc++fs
+	mpic++ src/windtunnel.cpp --std=c++17 -Wall -acc -Minfo -fast -lstdc++fs -o bin/windtunnel
 else 
-	mpic++ src/windtunnel.cpp -o bin/windtunnel --std=c++17 -Wall -acc -Minfo -fast
+	mpic++ src/windtunnel.cpp --std=c++17 -Wall -acc -Minfo -fast -o bin/windtunnel
 endif
 
 2vtk:
