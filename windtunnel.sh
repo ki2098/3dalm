@@ -10,4 +10,4 @@
 module load nvidia
 module load nvompi
 
-mpiexec -n 4 -display-map bin/windtunnel plain_windtunnel_gk.json
+mpiexec -n 4 -display-map bin/windtunnel -f plain_windtunnel_gk.json -c
