@@ -6,7 +6,7 @@
 
     "output":{
         "prefix":"data/plain_windtunnel",
-        "output_start_time":0,
+        "output_start_time":20,
         "output_interval_time":20,
         "time_avg_start_time":20
     },
