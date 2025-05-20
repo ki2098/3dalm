@@ -39,8 +39,9 @@ static void clear_prev_files(std::string prefix) {
     }
 
     for (const auto &file_to_delete : files_to_delete) {
-        std::cout << "delete file " << file_to_delete.string() << std::endl;
-        std::filesystem::remove(file_to_delete);
+        if (std::filesystem::remove(file_to_delete)) {
+            std::cout << "delete file " << file_to_delete.string() << std::endl;
+        }
     }
 }
 
