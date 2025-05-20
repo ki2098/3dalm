@@ -4,12 +4,45 @@
 #include <string>
 #include <openacc.h>
 #include "json.hpp"
+#include "argparse.hpp"
 #include "io.h"
 #include "bc.h"
 #include "cfd.h"
 #include "eq.h"
 
 using json = nlohmann::json;
+
+static void clear_prev_files(std::string prefix) {
+    std::filesystem::path prefix_path(prefix);
+    std::filesystem::path directory_path;
+    if (prefix_path.has_parent_path()) {
+        directory_path = prefix_path.parent_path();
+    } else {
+        directory_path = ".";
+    }
+
+    if (!std::filesystem::is_directory(directory_path)) {
+        return;
+    }
+
+    std::vector<std::filesystem::path> files_to_delete;
+    for (const auto &entry : std::filesystem::directory_iterator(directory_path)) {
+        if (
+            entry.is_regular_file() && 
+            entry.path().filename().string().rfind(
+                prefix_path.filename().string(),
+                0
+            ) == 0
+        ) {
+            files_to_delete.push_back(entry.path());
+        }
+    }
+
+    for (const auto &file_to_delete : files_to_delete) {
+        std::cout << "delete file " << file_to_delete.string() << std::endl;
+        std::filesystem::remove(file_to_delete);
+    }
+}
 
 static void calc_partition(
     Int gsize[3], Int size[3], Int offset[3], Int gc,
@@ -305,28 +338,49 @@ delete(r0[:len], p[:len], pp[:len], q[:len], s[:len], ss[:len], t[:len], tmp[:le
 struct Monitor {
     Int i;
     Real x;
-    Real I = 0;
-    std::ofstream ofs;
+    std::string output_path;
     bool active = false;
 
+    Int max_rec_cnt;
+    Int cur_rec_cnt = 0;
+    std::vector<std::pair<float, float>> recs;
+
     void initialize(
-        std::string path,
-        Int i, Real x
+        const std::string &output_path,
+        Int i, Real x, Int max_rec_cnt = 10000
     ) {
-        ofs.open(path);
-        active = true;
-        this->x = x;
+        this->output_path = output_path;
         this->i = i;
+        this->x = x;
+        std::ofstream ofs(this->output_path);
         ofs << "# x = " << this->x << std::endl;
         ofs << "t,I" << std::endl;
+        ofs.close();
+        active = true;
+
+        this->max_rec_cnt = max_rec_cnt;
+        recs = std::vector<std::pair<float, float>>(max_rec_cnt);
     }
 
-    void write(Real t) {
-        ofs << t << "," << I << std::endl;
+    void add_record(float t, float I) {
+        recs[cur_rec_cnt] = {t, I};
+        cur_rec_cnt ++;
+        if (cur_rec_cnt == max_rec_cnt) {
+            std::ofstream ofs(this->output_path, std::ios::app);
+            for (const auto &rec : recs) {
+                ofs << rec.first << "," << rec.second << std::endl;
+            }
+            ofs.close();
+            cur_rec_cnt = 0;
+        }
     }
 
     ~Monitor() {
-        if (ofs.is_open()) {
+        if (cur_rec_cnt > 0) {
+            std::ofstream ofs(this->output_path, std::ios::app);
+            for (int i = 0; i < cur_rec_cnt; i ++) {
+                ofs << recs[i].first << "," << recs[i].second << std::endl;
+            }
             ofs.close();
         }
     }
@@ -352,12 +406,22 @@ struct Solver {
 
     std::vector<Monitor> monitors;
 
-    void initialize(int argc, char **argv) {
+    void initialize(int argc, char **argv) {        
         MPI_Init(&argc, &argv);
         MPI_Comm_size(MPI_COMM_WORLD, &mpi.size);
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
 
-        auto setup_file_path = std::filesystem::canonical(argv[1]);
+        argparse::ArgumentParser parser;
+        parser.add_argument("-f", "--file")
+            .required()
+            .help("setup json file path");
+        parser.add_argument("-c", "--clear")
+            .default_value(false)
+            .implicit_value(true)
+            .help("delete existing tiles with the same prefix");
+        parser.parse_args(argc, argv);
+
+        auto setup_file_path = std::filesystem::canonical(parser.get<std::string>("-f"));
         if (setup_file_path.has_parent_path()) {
             std::filesystem::current_path(setup_file_path.parent_path());
         }
@@ -376,6 +440,23 @@ struct Solver {
 
         auto &output_json = setup_json["output"];
         output_prefix = output_json["prefix"];
+
+        if (mpi.rank == 0) {
+            if (parser["-c"] == true) {
+                clear_prev_files(output_prefix);
+            }
+
+            std::filesystem::path output_prefix_path(output_prefix);
+            if (output_prefix_path.has_parent_path()) {
+                const auto &output_directory_path = output_prefix_path.parent_path();
+                if (!std::filesystem::exists(output_directory_path)) {
+                    std::filesystem::create_directories(output_directory_path);
+                    printf("create folder %s\n", output_directory_path.c_str());
+                }
+            }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+
         Real output_start_time = output_json["output_start_time"];
         Real output_interval_time = output_json["output_interval_time"];
         Real tavg_start_time = output_json["time_avg_start_time"];
@@ -426,11 +507,12 @@ struct Solver {
                     Int nearest_i = (
                         monitor_x - x[i] < x[i + 1] - monitor_x
                     )? i : i + 1;
-                    if (nearest_i >= gc && nearest_i <= size[0] - gc - 1) {
+                    if (nearest_i >= gc && nearest_i < size[0] - gc) {
                         monitors[m].initialize(
                             output_prefix + "_monitor" + std::to_string(m) + ".csv",
                             nearest_i,
-                            x[nearest_i]
+                            x[nearest_i],
+                            rt.output_interval_step
                         );
                     }
                     break;
@@ -534,8 +616,8 @@ struct Solver {
 
         if (mpi.rank == 0) {
             printf("SETUP INFO\n");
-            printf("\tsetupfile = %s\n", setup_file_path.string().c_str());
-            printf("\tworking directory = %s\n", std::filesystem::current_path().string().c_str());
+            printf("\tsetupfile = %s\n", setup_file_path.c_str());
+            printf("\tworking directory = %s\n", std::filesystem::current_path().c_str());
 
             printf("DEVICE INFO\n");
             printf("\tnumber of GPUs = %d\n", gpu_count);
@@ -808,14 +890,16 @@ SKIP_TIME_INTEGRAL:
         if (rt.step >= rt.output_start_step) {
             for (auto &m : monitors) {
                 if (m.active) {
-                    m.I = calc_avg_monitor_I(
-                        cfd.U, cfd.Uin,
-                        size, m.i, gc
+                    m.add_record(
+                        rt.get_time(),
+                        calc_avg_monitor_I(
+                            cfd.U, cfd.Uin,
+                            size, m.i, gc
+                        )
                     );
-                    m.write(rt.get_time());
                 }
             }
-            
+
             if ((rt.step - rt.output_start_step)%rt.output_interval_step == 0) {
                 out_handler.update_host();
                 write_binary(

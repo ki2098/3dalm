@@ -5,10 +5,14 @@
 using namespace std;
 
 int main(int argc, char **argv) {
-    auto file = filesystem::canonical(argv[1]);
+    auto file = filesystem::weakly_canonical(argv[1]);
     cout << "parent path: " << file.parent_path() << endl;
-    filesystem::current_path(file.parent_path());
+    if (file.has_parent_path())
+        filesystem::current_path(file.parent_path());
     cout << filesystem::current_path() << endl;
+    cout << file.filename() << endl;
 
     cout << filesystem::canonical(filesystem::current_path().concat("/..")) << endl;
+
+    cout << filesystem::is_directory("foo/bar") << endl;
 }
