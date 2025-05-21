@@ -96,87 +96,49 @@ struct OutHandler : public Header {
 };
 
 static void build_mesh(
-    const std::string &directory,
+    const std::string &path,
     Real *&x, Real *&y, Real *&z,
     Real *&dx, Real *&dy, Real *&dz,
-    Int size[3], Int gc,
+    Int size[3], Int &gc,
     MpiInfo *mpi
 ) {
-    Int node_size[3];
+    // std::ifstream x_coord_file(directory + "/x.txt");
+    // x_coord_file >> node_size[0];
+    // double *node_x = new double[node_size[0]];
+    // for (int i = 0; i < node_size[0]; i ++) {
+    //     x_coord_file >> node_x[i];
+    // }
 
-    std::ifstream x_coord_file(directory + "/x.txt");
-    x_coord_file >> node_size[0];
-    double *node_x = new double[node_size[0]];
-    for (int i = 0; i < node_size[0]; i ++) {
-        x_coord_file >> node_x[i];
-    }
+    // std::ifstream y_coord_file(directory + "/y.txt");
+    // y_coord_file >> node_size[1];
+    // double *node_y = new double[node_size[1]];
+    // for (int j = 0; j < node_size[1]; j ++) {
+    //     y_coord_file >> node_y[j];
+    // }
 
-    std::ifstream y_coord_file(directory + "/y.txt");
-    y_coord_file >> node_size[1];
-    double *node_y = new double[node_size[1]];
-    for (int j = 0; j < node_size[1]; j ++) {
-        y_coord_file >> node_y[j];
-    }
-
-    std::ifstream z_coord_file(directory + "/z.txt");
-    z_coord_file >> node_size[2];
-    double *node_z = new double[node_size[2]];
-    for (int k = 0; k < node_size[2]; k ++) {
-        z_coord_file >> node_z[k];
-    }
-
-    size[0] = node_size[0] - 1 + 2*gc;
-    size[1] = node_size[1] - 1 + 2*gc;
-    size[2] = node_size[2] - 1 + 2*gc;
+    // std::ifstream z_coord_file(directory + "/z.txt");
+    // z_coord_file >> node_size[2];
+    // double *node_z = new double[node_size[2]];
+    // for (int k = 0; k < node_size[2]; k ++) {
+    //     z_coord_file >> node_z[k];
+    // }
+    std::ifstream coord_file(path);
+    coord_file >> size[0] >> size[1] >> size[2] >> gc;
     x  = new double[size[0]];
     dx = new double[size[0]];
     y  = new double[size[1]];
     dy = new double[size[1]];
     z  = new double[size[2]];
     dz = new double[size[2]];
-
-    for (int i = gc; i < size[0] - gc; i ++) {
-        dx[i] = node_x[i - gc + 1] - node_x[i - gc];
-        x[i]  = node_x[i - gc] + 0.5*dx[i];
+    for (Int i = 0; i < size[0]; i ++) {
+        coord_file >> x[i] >> dx[i];
     }
-    for (int i = gc - 1; i >= 0; i --) {
-        dx[i] = 2*dx[i + 1] - dx[i + 2];
-        x[i]  = x[i + 1] - 0.5*(dx[i] + dx[i + 1]);
+    for (Int j = 0; j < size[1]; j ++) {
+        coord_file >> y[j] >> dy[j];
     }
-    for (int i = size[0] - gc; i < size[0]; i ++) {
-        dx[i] = 2*dx[i - 1] - dx[i - 2];
-        x[i]  = x[i - 1] + 0.5*(dx[i] + dx[i - 1]);
+    for (Int k = 0; k < size[2]; k ++) {
+        coord_file >> z[k] >> dz[k];
     }
-
-    for (int j = gc; j < size[1] - gc; j ++) {
-        dy[j] = node_y[j - gc + 1] - node_y[j - gc];
-        y[j]  = node_y[j - gc] + 0.5*dy[j];
-    }
-    for (int j = gc - 1; j >= 0; j --) {
-        dy[j] = 2*dy[j + 1] - dy[j + 2];
-        y[j]  = y[j + 1] - 0.5*(dy[j] + dy[j + 1]);
-    }
-    for (int j = size[1] - gc; j < size[1]; j ++) {
-        dy[j] = 2*dy[j - 1] - dy[j - 2];
-        y[j]  = y[j - 1] + 0.5*(dy[j] + dy[j - 1]);
-    }
-
-    for (int k = gc; k < size[2] - gc; k ++) {
-        dz[k] = node_z[k - gc + 1] - node_z[k - gc];
-        z[k]  = node_z[k - gc] + 0.5*dz[k];
-    }
-    for (int k = gc - 1; k >= 0; k --) {
-        dz[k] = 2*dz[k + 1] - dz[k + 2];
-        z[k]  = z[k + 1] - 0.5*(dz[k] + dz[k + 1]);
-    }
-    for (int k = size[2] - gc; k < size[2]; k ++) {
-        dz[k] = 2*dz[k - 1] - dz[k - 2];
-        z[k]  = z[k - 1] + 0.5*(dz[k] + dz[k - 1]);
-    }
-
-    delete[] node_x;
-    delete[] node_y;
-    delete[] node_z;
 }
 
 static void write_mesh(

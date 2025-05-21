@@ -130,7 +130,7 @@ struct Runtime {
 struct Mesh {
     Real *x, *y, *z, *dx, *dy, *dz;
 
-    void initialize_from_path(const std::string &path, Int size[3], Int gc, MpiInfo *mpi) {
+    void initialize_from_file(const std::string &path, Int size[3], Int &gc, MpiInfo *mpi) {
         build_mesh(path, x, y, z, dx, dy, dz, size, gc, mpi);
 
 #pragma acc enter data \
@@ -365,7 +365,7 @@ struct Solver {
     Int gsize[3];
     Int size[3];
     Int offset[3];
-    Int gc = 2;
+    Int gc;
 
     MpiInfo mpi;
     Runtime rt;
@@ -375,7 +375,7 @@ struct Solver {
 
     json setup_json;
     json snapshot_json = {};
-    std::filesystem::path output_dir, base_dir;
+    std::filesystem::path case_dir, output_dir;
 
     OutHandler out_handler, tavg_out_handler;
 
@@ -387,17 +387,16 @@ struct Solver {
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
 
         argparse::ArgumentParser parser;
-        parser.add_argument("-f", "--file")
+        parser.add_argument("-d", "--dir")
             .required()
-            .help("setup json file path");
+            .help("case directory");
         parser.add_argument("-c", "--clear")
             .default_value(false)
             .implicit_value(true)
             .help("delete existing tiles with the same prefix");
         parser.parse_args(argc, argv);
 
-        auto setup_path = std::filesystem::canonical(parser.get<std::string>("-f"));
-        base_dir = setup_path.parent_path();
+        case_dir = std::filesystem::canonical(parser.get<std::string>("-d"));
         // if (setup_path.has_parent_path()) {
         //     std::filesystem::current_path(setup_path.parent_path());
         // }
@@ -406,7 +405,8 @@ struct Solver {
         int gpu_id = mpi.rank%gpu_count;
         acc_set_device_num(gpu_id, acc_device_nvidia);
 
-        setup_json = json::parse(std::ifstream(setup_path));
+        setup_json = json::parse(std::ifstream(case_dir/"setup.json"));
+        MPI_Barrier(MPI_COMM_WORLD);
 
         auto &rt_json = setup_json["runtime"];
         Real dt = rt_json["dt"];
@@ -414,13 +414,13 @@ struct Solver {
         rt.initialize(total_time/dt, dt);
 
         auto &output_json = setup_json["output"];
-        output_dir = base_dir/output_json["directory"];
+        output_dir = case_dir/"output";
 
         if (mpi.rank == 0) {
             if (parser["-c"] == true) {
                 if (std::filesystem::exists(output_dir)) {
                     if (std::filesystem::remove_all(output_dir)) {
-                        printf("delete %s\n", std::filesystem::weakly_canonical(output_dir).c_str());
+                        printf("delete %s\n", output_dir.c_str());
                     }
                 }
             }
@@ -436,7 +436,7 @@ struct Solver {
 
             if (!std::filesystem::exists(output_dir)) {
                 if (std::filesystem::create_directories(output_dir)) {
-                    printf("create %s\n", std::filesystem::canonical(output_dir).c_str());
+                    printf("create %s\n", output_dir.c_str());
                 }
             }
         }
@@ -460,8 +460,9 @@ struct Solver {
         }
 
         auto &mesh_json = setup_json["mesh"];
-        auto mesh_path = base_dir/mesh_json["path"];
-        gmesh.initialize_from_path(mesh_path, gsize, gc, &mpi);
+        auto mesh_path = case_dir/"mesh.txt";
+        gmesh.initialize_from_file(mesh_path, gsize, gc, &mpi);
+        assert(gc >= 2);
         mesh.initialize_from_global_mesh(&gmesh, gsize, size, offset, gc, &mpi);
 
         // printf("%d mesh OK\n", mpi.rank);
@@ -616,14 +617,13 @@ struct Solver {
 
         if (mpi.rank == 0) {
             printf("SETUP INFO\n");
-            printf("\tsetupfile = %s\n", setup_path.c_str());
-            printf("\tbase directory = %s\n", base_dir.c_str());
+            printf("\tcase directory = %s\n", case_dir.c_str());
 
             printf("DEVICE INFO\n");
             printf("\tnumber of GPUs = %d\n", gpu_count);
 
             printf("MESH INFO\n");
-            printf("\tdirectory = %s\n", mesh_path.c_str());
+            printf("\tpath = %s\n", mesh_path.c_str());
             printf("\tglobal size = (%ld %ld %ld)\n", gsize[0], gsize[1], gsize[2]);
             printf("\tguide cell = %ld\n", gc);
 
@@ -667,16 +667,6 @@ struct Solver {
             printf("\tmax iteration = %ld\n", eq.max_it);
             printf("\ttolerance = %lf\n", eq.tol);
             printf("\tmax A diag = %lf\n", eq.max_diag);
-
-            write_mesh(
-                output_dir/"mesh.txt",
-                gmesh.x, gmesh.y, gmesh.z,
-                gmesh.dx, gmesh.dy, gmesh.dz,
-                gsize, gc
-            );
-
-            std::ofstream json_output(output_dir/"setup.json");
-            json_output << std::setw(2) << setup_json;
 
             json part_json;
             part_json["size"] = {gsize[0], gsize[1], gsize[2]};
