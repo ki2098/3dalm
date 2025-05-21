@@ -24,7 +24,7 @@ Int vtkindex(Int i, Int j, Int k, Int m, Int size[3], Int dim) {
 }
 
 void read_binary(
-    string path,
+    const string &path,
     vtkNew<vtkRectilinearGrid> &grid
 ) {
     /** read header data */

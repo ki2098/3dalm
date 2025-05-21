@@ -15,4 +15,6 @@ int main(int argc, char **argv) {
     cout << filesystem::canonical(filesystem::current_path().concat("/..")) << endl;
 
     cout << filesystem::is_directory("foo/bar") << endl;
+
+    cout << filesystem::path("xxx/")/"haha" << endl;
 }

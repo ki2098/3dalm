@@ -3,16 +3,17 @@
 #include <array>
 #include <numeric>
 #include <cassert>
+#include <filesystem>
 #include "json.hpp"
 #include "io.h"
 #include "util.h"
 
 using namespace std;
 using json = nlohmann::json;
-
+namespace fs = std::filesystem;
 
 void load_mesh(
-    string path,
+    const string &path,
     Int size[3], Int &gc,
     Real *&x, Real *&y, Real *&z
 ) {
@@ -32,7 +33,6 @@ void load_mesh(
         mesh_file >> z[k] >> dummy;
     }
 
-    mesh_file.close();
 }
 
 void merge_rank_var(
@@ -56,12 +56,16 @@ void merge_rank_var(
     }}}
 }
 
-void reconstruct(const json &part_json, const json &snapshot_json, string prefix, const string &mesh_path, bool tavg = false) {
+void reconstruct(const fs::path &path, bool tavg = false) {
+    auto snapshot_json = json::parse(std::ifstream(path/"snapshot.json"));
+    auto part_json = json::parse(std::ifstream(path/"partition.json"));
+
     OutHandler out_handler;
 
     Int peek_step = -1;
+    string prefix;
     if (tavg) {
-        prefix += "_tavg";
+        prefix = "tavg";
         for (auto &peek : snapshot_json) {
             if (peek.value("tavg", "no") == "yes") {
                 peek_step = peek["step"];
@@ -69,6 +73,7 @@ void reconstruct(const json &part_json, const json &snapshot_json, string prefix
             }
         }
     } else {
+        prefix = "inst";
         for (auto &peek : snapshot_json) {
             peek_step = peek["step"];
             break;
@@ -79,17 +84,16 @@ void reconstruct(const json &part_json, const json &snapshot_json, string prefix
         return;
     }
 
-    string peek_filename = make_rank_binary_filename(prefix, 0, peek_step);
-    ifstream peek_ifs(peek_filename);
+    auto peek_path = path/make_rank_binary_filename(prefix, 0, peek_step);
+    ifstream peek_ifs(peek_path);
     // gheader.read(peek_ifs);
     out_handler.read(peek_ifs);
-    peek_ifs.close();
     Int var_count = out_handler.var_count;
     auto &var_dim = out_handler.var_dim;
     auto &var_name = out_handler.var_name;
 
     Real *gx, *gy, *gz;
-    load_mesh(mesh_path, out_handler.size, out_handler.gc, gx, gy, gz);
+    load_mesh(path/"mesh.txt", out_handler.size, out_handler.gc, gx, gy, gz);
     auto gsize = out_handler.size;
     Int gc = out_handler.gc;
     Int glen = gsize[0]*gsize[1]*gsize[2];
@@ -122,7 +126,7 @@ void reconstruct(const json &part_json, const json &snapshot_json, string prefix
 
         Int step = snapshot["step"];
   
-        string result_path = make_binary_filename(prefix, step);
+        auto result_path = path/make_binary_filename(prefix, step);
         // Real **gdata = new Real*[var_count];
         // for (Int v = 0; v < var_count; v ++) {
         //     gdata[v] = new Real[glen*var_dim[v]];
@@ -133,7 +137,7 @@ void reconstruct(const json &part_json, const json &snapshot_json, string prefix
         }
 
         for (int rank = 0; rank < mpi_size; rank ++) {
-            string rank_file_path = make_rank_binary_filename(prefix, rank, step);
+            auto rank_file_path = path/make_rank_binary_filename(prefix, rank, step);
             ifstream ifs(rank_file_path);
 
             Header header;
@@ -166,8 +170,6 @@ void reconstruct(const json &part_json, const json &snapshot_json, string prefix
                 printf("%s ", var_name[v].c_str());
             }
             printf("\n");
-            
-            ifs.close();
         }
 
         write_binary(
@@ -186,19 +188,8 @@ void reconstruct(const json &part_json, const json &snapshot_json, string prefix
 }
 
 int main(int argc, char *argv[]) {
-    string prefix(argv[1]);
-    string part_path = prefix + "_partition.json";
-    string snapshot_path = prefix + "_snapshot.json";
-    string mesh_path = prefix + "_mesh.txt";
-    ifstream part_file(part_path);
-    ifstream snapshot_file(snapshot_path);
-    auto part_json = json::parse(part_file);
-    auto snapshot_json = json::parse(snapshot_file);
-    part_file.close();
-    snapshot_file.close();
-
     printf("reconstruct instantaneous field files\n");
-    reconstruct(part_json, snapshot_json, prefix, mesh_path);
+    reconstruct(argv[1]);
     printf("reconstruct time averaged field files\n");
-    reconstruct(part_json, snapshot_json, prefix, mesh_path, true);
+    reconstruct(argv[1], true);
 }

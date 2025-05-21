@@ -12,38 +12,15 @@
 
 using json = nlohmann::json;
 
-static void clear_prev_files(std::string prefix) {
-    std::filesystem::path prefix_path(prefix);
-    std::filesystem::path directory_path;
-    if (prefix_path.has_parent_path()) {
-        directory_path = prefix_path.parent_path();
-    } else {
-        directory_path = ".";
-    }
+// static void delete_prev_directory(std::string path) {
+//     if (!std::filesystem::is_directory(path)) {
+//         return;
+//     }
 
-    if (!std::filesystem::is_directory(directory_path)) {
-        return;
-    }
-
-    std::vector<std::filesystem::path> files_to_delete;
-    for (const auto &entry : std::filesystem::directory_iterator(directory_path)) {
-        if (
-            entry.is_regular_file() && 
-            entry.path().filename().string().rfind(
-                prefix_path.filename().string(),
-                0
-            ) == 0
-        ) {
-            files_to_delete.push_back(entry.path());
-        }
-    }
-
-    for (const auto &file_to_delete : files_to_delete) {
-        if (std::filesystem::remove(file_to_delete)) {
-            std::cout << "delete file " << file_to_delete.string() << std::endl;
-        }
-    }
-}
+//     if (std::filesystem::remove_all(path)) {
+//         printf("delete directory %s\n", path.c_str());
+//     }
+// }
 
 static void calc_partition(
     Int gsize[3], Int size[3], Int offset[3], Int gc,
@@ -153,7 +130,7 @@ struct Runtime {
 struct Mesh {
     Real *x, *y, *z, *dx, *dy, *dz;
 
-    void initialize_from_path(std::string path, Int size[3], Int gc, MpiInfo *mpi) {
+    void initialize_from_path(const std::string &path, Int size[3], Int gc, MpiInfo *mpi) {
         build_mesh(path, x, y, z, dx, dy, dz, size, gc, mpi);
 
 #pragma acc enter data \
@@ -339,7 +316,7 @@ delete(r0[:len], p[:len], pp[:len], q[:len], s[:len], ss[:len], t[:len], tmp[:le
 struct Monitor {
     Int i;
     Real x;
-    std::string output_path;
+    std::string path;
     bool active = false;
 
     Int max_rec_cnt;
@@ -347,16 +324,15 @@ struct Monitor {
     std::vector<std::pair<float, float>> recs;
 
     void initialize(
-        const std::string &output_path,
+        const std::string &path,
         Int i, Real x, Int max_rec_cnt = 10000
     ) {
-        this->output_path = output_path;
+        this->path = path;
         this->i = i;
         this->x = x;
-        std::ofstream ofs(this->output_path);
+        std::ofstream ofs(this->path);
         ofs << "# x = " << this->x << std::endl;
         ofs << "t,I" << std::endl;
-        ofs.close();
         active = true;
 
         this->max_rec_cnt = max_rec_cnt;
@@ -367,22 +343,20 @@ struct Monitor {
         recs[cur_rec_cnt] = {t, I};
         cur_rec_cnt ++;
         if (cur_rec_cnt == max_rec_cnt) {
-            std::ofstream ofs(this->output_path, std::ios::app);
+            std::ofstream ofs(this->path, std::ios::app);
             for (const auto &rec : recs) {
                 ofs << rec.first << "," << rec.second << std::endl;
             }
-            ofs.close();
             cur_rec_cnt = 0;
         }
     }
 
     ~Monitor() {
         if (cur_rec_cnt > 0) {
-            std::ofstream ofs(this->output_path, std::ios::app);
+            std::ofstream ofs(this->path, std::ios::app);
             for (int i = 0; i < cur_rec_cnt; i ++) {
                 ofs << recs[i].first << "," << recs[i].second << std::endl;
             }
-            ofs.close();
         }
     }
 };
@@ -401,7 +375,7 @@ struct Solver {
 
     json setup_json;
     json snapshot_json = {};
-    std::string output_prefix;
+    std::filesystem::path output_dir, base_dir;
 
     OutHandler out_handler, tavg_out_handler;
 
@@ -422,17 +396,17 @@ struct Solver {
             .help("delete existing tiles with the same prefix");
         parser.parse_args(argc, argv);
 
-        auto setup_file_path = std::filesystem::canonical(parser.get<std::string>("-f"));
-        if (setup_file_path.has_parent_path()) {
-            std::filesystem::current_path(setup_file_path.parent_path());
-        }
+        auto setup_path = std::filesystem::canonical(parser.get<std::string>("-f"));
+        base_dir = setup_path.parent_path();
+        // if (setup_path.has_parent_path()) {
+        //     std::filesystem::current_path(setup_path.parent_path());
+        // }
 
         int gpu_count = acc_get_num_devices(acc_device_nvidia);
         int gpu_id = mpi.rank%gpu_count;
         acc_set_device_num(gpu_id, acc_device_nvidia);
 
-        std::ifstream setup_file(setup_file_path.filename());
-        setup_json = json::parse(setup_file);
+        setup_json = json::parse(std::ifstream(setup_path));
 
         auto &rt_json = setup_json["runtime"];
         Real dt = rt_json["dt"];
@@ -440,19 +414,29 @@ struct Solver {
         rt.initialize(total_time/dt, dt);
 
         auto &output_json = setup_json["output"];
-        output_prefix = output_json["prefix"];
+        output_dir = base_dir/output_json["directory"];
 
         if (mpi.rank == 0) {
             if (parser["-c"] == true) {
-                clear_prev_files(output_prefix);
+                if (std::filesystem::exists(output_dir)) {
+                    if (std::filesystem::remove_all(output_dir)) {
+                        printf("delete %s\n", std::filesystem::weakly_canonical(output_dir).c_str());
+                    }
+                }
             }
 
-            std::filesystem::path output_prefix_path(output_prefix);
-            if (output_prefix_path.has_parent_path()) {
-                const auto &output_directory_path = output_prefix_path.parent_path();
-                if (!std::filesystem::exists(output_directory_path)) {
-                    std::filesystem::create_directories(output_directory_path);
-                    printf("create folder %s\n", output_directory_path.c_str());
+            // std::filesystem::path output_prefix_path(output_dir);
+            // if (output_prefix_path.has_parent_path()) {
+            //     const auto &output_directory_path = output_prefix_path.parent_path();
+            //     if (!std::filesystem::exists(output_directory_path)) {
+            //         std::filesystem::create_directories(output_directory_path);
+            //         printf("create folder %s\n", output_directory_path.c_str());
+            //     }
+            // }
+
+            if (!std::filesystem::exists(output_dir)) {
+                if (std::filesystem::create_directories(output_dir)) {
+                    printf("create %s\n", std::filesystem::canonical(output_dir).c_str());
                 }
             }
         }
@@ -465,13 +449,18 @@ struct Solver {
         rt.output_interval_step = output_interval_time/rt.dt;
         rt.tavg_start_step = tavg_start_time/rt.dt;
 
-        auto &tgg_json = setup_json["turbulence_grid"];
-        Real tgg_thickness = tgg_json["thickness"];
-        Real tgg_spacing = tgg_json["spacing"];
-        Real tgg_placement = tgg_json["placement"];
+        Real tgg_thickness, tgg_spacing, tgg_placement;
+        auto it_tgg_json = setup_json.find("turbulence_grid");
+        bool there_is_tgg = (it_tgg_json != setup_json.end());
+        if (there_is_tgg) {
+            auto &tgg_json = *it_tgg_json;
+            tgg_thickness = tgg_json["thickness"];
+            tgg_spacing = tgg_json["spacing"];
+            tgg_placement = tgg_json["placement"];
+        }
 
         auto &mesh_json = setup_json["mesh"];
-        std::string mesh_path = mesh_json["path"];
+        auto mesh_path = base_dir/mesh_json["path"];
         gmesh.initialize_from_path(mesh_path, gsize, gc, &mpi);
         mesh.initialize_from_global_mesh(&gmesh, gsize, size, offset, gc, &mpi);
 
@@ -496,30 +485,34 @@ struct Solver {
 
         // printf("%d eq OK\n", mpi.rank);
 
-        auto &monitors_json = setup_json["monitor"];
-        monitors = std::vector<Monitor>(monitors_json.size());
-        for (Int m = 0; m < monitors.size(); m ++) {
-            auto &monitor_json = monitors_json[m];
-            Real monitor_x = monitor_json["x"];
-            Real *x = mesh.x;
+        auto it_monitor_json = setup_json.find("monitor");
+        if (it_monitor_json != setup_json.end()) {
+            auto &monitors_json = *it_monitor_json;
+            monitors = std::vector<Monitor>(monitors_json.size());
+            for (Int m = 0; m < monitors.size(); m ++) {
+                auto &monitor_json = monitors_json[m];
+                Real monitor_x = monitor_json["x"];
+                Real *x = mesh.x;
 
-            for (Int i = gc - 1; i < size[0] - gc; i ++) {
-                if (x[i] <= monitor_x && x[i + 1] > monitor_x) {
-                    Int nearest_i = (
-                        monitor_x - x[i] < x[i + 1] - monitor_x
-                    )? i : i + 1;
-                    if (nearest_i >= gc && nearest_i < size[0] - gc) {
-                        monitors[m].initialize(
-                            output_prefix + "_monitor" + std::to_string(m) + ".csv",
-                            nearest_i,
-                            x[nearest_i],
-                            rt.output_interval_step
-                        );
+                for (Int i = gc - 1; i < size[0] - gc; i ++) {
+                    if (x[i] <= monitor_x && x[i + 1] > monitor_x) {
+                        Int nearest_i = (
+                            monitor_x - x[i] < x[i + 1] - monitor_x
+                        )? i : i + 1;
+                        if (nearest_i >= gc && nearest_i < size[0] - gc) {
+                            monitors[m].initialize(
+                                output_dir/("monitor" + std::to_string(m) + ".csv"),
+                                nearest_i,
+                                x[nearest_i],
+                                rt.output_interval_step
+                            );
+                        }
+                        break;
                     }
-                    break;
                 }
             }
         }
+        
 
         eq.max_diag = build_A(
             eq.A,
@@ -536,13 +529,19 @@ struct Solver {
         fill_array(cfd.Uold, cfd.Uin, len);
         fill_array(cfd.p, 0., len);
 
-        set_turbulence_generating_grid(
-            cfd.solid,
-            mesh.x, mesh.y, mesh.z,
-            mesh.dx, mesh.dy, mesh.dz,
-            tgg_thickness, tgg_spacing, tgg_placement,
-            size, gc
-        );
+        if (there_is_tgg)
+        {
+            set_turbulence_generating_grid(
+                cfd.solid,
+                mesh.x, mesh.y, mesh.z,
+                mesh.dx, mesh.dy, mesh.dz,
+                tgg_thickness, tgg_spacing, tgg_placement,
+                size, gc
+            );
+        } else {
+            fill_array(cfd.solid, 0., len);
+        }
+        
 
         set_solid_U(
             cfd.U, cfd.solid,
@@ -617,14 +616,14 @@ struct Solver {
 
         if (mpi.rank == 0) {
             printf("SETUP INFO\n");
-            printf("\tsetupfile = %s\n", setup_file_path.c_str());
-            printf("\tworking directory = %s\n", std::filesystem::current_path().c_str());
+            printf("\tsetupfile = %s\n", setup_path.c_str());
+            printf("\tbase directory = %s\n", base_dir.c_str());
 
             printf("DEVICE INFO\n");
             printf("\tnumber of GPUs = %d\n", gpu_count);
 
             printf("MESH INFO\n");
-            printf("\tpath = %s\n", mesh_path.c_str());
+            printf("\tdirectory = %s\n", mesh_path.c_str());
             printf("\tglobal size = (%ld %ld %ld)\n", gsize[0], gsize[1], gsize[2]);
             printf("\tguide cell = %ld\n", gc);
 
@@ -633,7 +632,7 @@ struct Solver {
             printf("\tmax step = %ld\n", rt.max_step);
 
             printf("OUTPUT INFO\n");
-            printf("\tprefix = %s\n", output_prefix.c_str());
+            printf("\tdirectory = %s\n", output_dir.c_str());
             printf("\toutput start step = %ld\n", rt.output_start_step);
             printf("\toutput interval step = %ld\n", rt.output_interval_step);
             printf("\ttime avg start step = %ld\n", rt.tavg_start_step);
@@ -649,9 +648,14 @@ struct Solver {
             printf("\n");
 
             printf("TURBULENCE GENERATING GRID INFO\n");
-            printf("\tthickness = %lf\n", tgg_thickness);
-            printf("\tspacing = %lf\n", tgg_spacing);
-            printf("\tplacement = %lf\n", tgg_placement);
+            if (there_is_tgg) {
+                printf("\tthickness = %lf\n", tgg_thickness);
+                printf("\tspacing = %lf\n", tgg_spacing);
+                printf("\tplacement = %lf\n", tgg_placement);
+            } else {
+                printf("\tno turbulence generating grid specified\n");
+            }
+            
 
             printf("CFD INFO\n");
             printf("\tRe = %lf\n", cfd.Re);
@@ -665,15 +669,14 @@ struct Solver {
             printf("\tmax A diag = %lf\n", eq.max_diag);
 
             write_mesh(
-                output_prefix + "_mesh.txt",
+                output_dir/"mesh.txt",
                 gmesh.x, gmesh.y, gmesh.z,
                 gmesh.dx, gmesh.dy, gmesh.dz,
                 gsize, gc
             );
 
-            std::ofstream json_output(output_prefix + ".json");
+            std::ofstream json_output(output_dir/"setup.json");
             json_output << std::setw(2) << setup_json;
-            json_output.close();
 
             json part_json;
             part_json["size"] = {gsize[0], gsize[1], gsize[2]};
@@ -691,9 +694,8 @@ struct Solver {
                 rank_json["rank"] = rank;
                 part_json["partition"].push_back(rank_json);
             }
-            std::ofstream part_output(output_prefix + "_partition.json");
+            std::ofstream part_output(output_dir/"partition.json");
             part_output << std::setw(2) << part_json;
-            part_output.close();
             fflush(stdout);
         }
         MPI_Barrier(MPI_COMM_WORLD);
@@ -717,9 +719,8 @@ struct Solver {
 
     void finalize() {
         if (mpi.rank == 0) {
-            std::ofstream snapshot_output(output_prefix + "_snapshot.json");
+            std::ofstream snapshot_output(output_dir/"snapshot.json");
             snapshot_output << std::setw(2) << snapshot_json;
-            snapshot_output.close();
         }
         gmesh.finalize(gsize);
         mesh.finalize(size);
@@ -904,7 +905,7 @@ SKIP_TIME_INTEGRAL:
             if ((rt.step - rt.output_start_step)%rt.output_interval_step == 0) {
                 out_handler.update_host();
                 write_binary(
-                    make_rank_binary_filename(output_prefix, mpi.rank, rt.step),
+                    output_dir/make_rank_binary_filename("inst", mpi.rank, rt.step),
                     &out_handler,
                     mesh.x, mesh.y, mesh.z
                 );
@@ -916,7 +917,7 @@ SKIP_TIME_INTEGRAL:
                 if (rt.step >= rt.tavg_start_step) {
                     tavg_out_handler.update_host();
                     write_binary(
-                        make_rank_binary_filename(output_prefix + "_tavg", mpi.rank, rt.step),
+                        output_dir/make_rank_binary_filename("tavg", mpi.rank, rt.step),
                         &tavg_out_handler,
                         mesh.x, mesh.y, mesh.z
                     );
@@ -925,9 +926,8 @@ SKIP_TIME_INTEGRAL:
                 
                 snapshot_json.push_back(slice_json);
                 if (mpi.rank == 0) {
-                    std::ofstream snapshot_output(output_prefix + "_snapshot.json");
+                    std::ofstream snapshot_output(output_dir/"snapshot.json");
                     snapshot_output << std::setw(2) << snapshot_json;
-                    snapshot_output.close();
                 }
             }
         }

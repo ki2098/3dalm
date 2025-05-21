@@ -1,14 +1,14 @@
 {
     "runtime":{
         "dt":1e-3,
-        "time":10
+        "time":120
     },
 
     "output":{
-        "prefix":"data/plain_windtunnel",
-        "output_start_time":5,
-        "output_interval_time":1,
-        "time_avg_start_time":5
+        "directory":"data/plain_windtunnel",
+        "output_start_time":20,
+        "output_interval_time":20,
+        "time_avg_start_time":20
     },
 
     "turbulence_grid":{
