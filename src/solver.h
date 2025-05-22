@@ -387,16 +387,15 @@ struct Solver {
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
 
         argparse::ArgumentParser parser;
-        parser.add_argument("-d", "--dir")
-            .required()
+        parser.add_argument("dir")
+            .default_value(".")
             .help("case directory");
         parser.add_argument("-c", "--clear")
-            .default_value(false)
-            .implicit_value(true)
-            .help("delete existing tiles with the same prefix");
+            .flag()
+            .help("delete existing output folder");
         parser.parse_args(argc, argv);
 
-        case_dir = std::filesystem::canonical(parser.get<std::string>("-d"));
+        case_dir = std::filesystem::canonical(parser.get<std::string>("dir"));
         // if (setup_path.has_parent_path()) {
         //     std::filesystem::current_path(setup_path.parent_path());
         // }
@@ -424,15 +423,6 @@ struct Solver {
                     }
                 }
             }
-
-            // std::filesystem::path output_prefix_path(output_dir);
-            // if (output_prefix_path.has_parent_path()) {
-            //     const auto &output_directory_path = output_prefix_path.parent_path();
-            //     if (!std::filesystem::exists(output_directory_path)) {
-            //         std::filesystem::create_directories(output_directory_path);
-            //         printf("create folder %s\n", output_directory_path.c_str());
-            //     }
-            // }
 
             if (!std::filesystem::exists(output_dir)) {
                 if (std::filesystem::create_directories(output_dir)) {

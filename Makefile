@@ -18,9 +18,9 @@ reconstructor:
 ifeq ($(shell expr $(cxxversion) \< 8), 1)
 	$(error needs gcc version 8 or above)
 else ifeq ($(shell expr $(cxxversion) \= 8), 1)
-	g++ src/reconstructor.cpp --std=c++17 -Wall -O2 -lstdc++fs -o bin/reconstructor
+	g++ src/reconstructor.cpp --std=c++17 -O2 -lstdc++fs -o bin/reconstructor
 else 
-	g++ src/reconstructor.cpp -Wall -O2 -o bin/reconstructor
+	g++ src/reconstructor.cpp -O2 -o bin/reconstructor
 endif
 
 all: windtunnel 2vtk reconstructor

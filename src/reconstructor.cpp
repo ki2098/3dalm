@@ -56,9 +56,9 @@ void merge_rank_var(
     }}}
 }
 
-void reconstruct(const fs::path &path, bool tavg = false) {
-    auto snapshot_json = json::parse(std::ifstream(path/"snapshot.json"));
-    auto part_json = json::parse(std::ifstream(path/"partition.json"));
+void reconstruct(const fs::path &case_dir, bool tavg = false) {
+    auto snapshot_json = json::parse(std::ifstream(case_dir/"output/snapshot.json"));
+    auto part_json = json::parse(std::ifstream(case_dir/"output/partition.json"));
 
     OutHandler out_handler;
 
@@ -84,7 +84,7 @@ void reconstruct(const fs::path &path, bool tavg = false) {
         return;
     }
 
-    auto peek_path = path/make_rank_binary_filename(prefix, 0, peek_step);
+    auto peek_path = case_dir/"output"/make_rank_binary_filename(prefix, 0, peek_step);
     ifstream peek_ifs(peek_path);
     // gheader.read(peek_ifs);
     out_handler.read(peek_ifs);
@@ -93,7 +93,7 @@ void reconstruct(const fs::path &path, bool tavg = false) {
     auto &var_name = out_handler.var_name;
 
     Real *gx, *gy, *gz;
-    load_mesh(path/"mesh.txt", out_handler.size, out_handler.gc, gx, gy, gz);
+    load_mesh(case_dir/"mesh.txt", out_handler.size, out_handler.gc, gx, gy, gz);
     auto gsize = out_handler.size;
     Int gc = out_handler.gc;
     Int glen = gsize[0]*gsize[1]*gsize[2];
@@ -126,7 +126,7 @@ void reconstruct(const fs::path &path, bool tavg = false) {
 
         Int step = snapshot["step"];
   
-        auto result_path = path/make_binary_filename(prefix, step);
+        auto result_path = case_dir/"output"/make_binary_filename(prefix, step);
         // Real **gdata = new Real*[var_count];
         // for (Int v = 0; v < var_count; v ++) {
         //     gdata[v] = new Real[glen*var_dim[v]];
@@ -137,7 +137,7 @@ void reconstruct(const fs::path &path, bool tavg = false) {
         }
 
         for (int rank = 0; rank < mpi_size; rank ++) {
-            auto rank_file_path = path/make_rank_binary_filename(prefix, rank, step);
+            auto rank_file_path = case_dir/"output"/make_rank_binary_filename(prefix, rank, step);
             ifstream ifs(rank_file_path);
 
             Header header;

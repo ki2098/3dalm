@@ -7,20 +7,19 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('prefix', help='data file prefix')
+parser.add_argument('case', help='case directory')
 parser.add_argument('id', nargs='*', help='monitor id, if not given, plot all the monitors')
 args = parser.parse_args()
 ids = args.id
-prefix = args.prefix
+case_dir = args.case
 
 if not ids:
-    with open(prefix + '.json') as f:
+    with open(f'{case_dir}/setup.json') as f:
         setup = json.load(f)
         ids = list(range(len(setup['monitor'])))
 
 for id in ids:
-    filename = f'{prefix}_monitor{id}.csv'
-    with open(filename) as f:
+    with open(f'{case_dir}/output/monitor{id}.csv') as f:
         comment = f.readline()
         comment = comment[1:].strip()
         csv = pd.read_csv(f, comment='#')
