@@ -45,7 +45,7 @@
 				"End": -2,
 				"Begin_width": 0.05,
 				"End_width": 0.02,
-				"Division":40
+				"Division":45
 			},
 			{
 				"Label": "Stretch_y_02",
@@ -53,7 +53,7 @@
 				"End": 3.6,
 				"Begin_width": 0.02,
 				"End_width": 0.05,
-				"Division":40
+				"Division":45
 			}
 		]
 	},

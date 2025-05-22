@@ -30,49 +30,36 @@ with open(f'{src_dir}/z.txt') as f:
 cx = nx - 1 + 2*gc
 cy = ny - 1 + 2*gc
 cz = nz - 1 + 2*gc
-
-dx = [0.]*cx
-dy = [0.]*cy
-dz = [0.]*cz
 x = [0.]*cx
 y = [0.]*cy
 z = [0.]*cz
 
 for i in range(gc, cx - gc):
-    dx[i] = xlist[i - gc + 1] - xlist[i - gc]
-    x[i]  = xlist[i - gc] + 0.5*dx[i]
+    x[i]  = (xlist[i - gc] + xlist[i - gc + 1])/2
 
 for i in range(gc - 1, -1, -1):
-    dx[i] = 2*dx[i + 1] - dx[i + 2]
-    x[i]  = x[i + 1] - 0.5*(dx[i] + dx[i + 1])
+    x[i] = 3*x[i + 1] - 3*x[i + 2] + x[i + 3]
 
 for i in range(cx - gc, cx):
-    dx[i] = 2*dx[i - 1] - dx[i - 2]
-    x[i]  = x[i - 1] + 0.5*(dx[i] + dx[i - 1])
+    x[i] = 3*x[i - 1] - 3*x[i - 2] + x[i - 3]
 
 for j in range(gc, cy - gc):
-    dy[j] = ylist[j - gc + 1] - ylist[j - gc]
-    y[j]  = ylist[j - gc] + 0.5*dy[j]
+    y[j]  = (ylist[j - gc] + ylist[j - gc + 1])/2
 
 for j in range(gc - 1, -1, -1):
-    dy[j] = 2*dy[j + 1] - dy[j + 2]
-    y[j]  = y[j + 1] - 0.5*(dy[j] + dy[j + 1])
+    y[j] = 3*y[j + 1] - 3*y[j + 2] + y[j + 3]
 
 for j in range(cy - gc, cy):
-    dy[j] = 2*dy[j - 1] - dy[j - 2]
-    y[j]  = y[j - 1] + 0.5*(dy[j] + dy[j - 1])
+    y[j] = 3*y[j - 1] - 3*y[j - 2] + y[j - 3]
 
 for k in range(gc, cz - gc):
-    dz[k] = zlist[k - gc + 1] - zlist[k - gc]
-    z[k]  = zlist[k - gc] + 0.5*dz[k]
+    z[k]  = (zlist[k - gc] + zlist[k - gc + 1])/2
 
 for k in range(gc - 1, -1, -1):
-    dz[k] = 2*dz[k + 1] - dz[k + 2]
-    z[k]  = z[k + 1] - 0.5*(dz[k] + dz[k + 1])
+    z[k] = 3*z[k + 1] - 3*z[k + 2] + z[k + 3]
 
 for k in range(cz - gc, cz):
-    dz[k] = 2*dz[k - 1] - dz[k - 2]
-    z[k]  = z[k - 1] + 0.5*(dz[k] + dz[k - 1])
+    z[k] = 3*z[k - 1] - 3*z[k - 2] + z[k - 3]
 
 with open(dst_path, "w") as f:
     f.write(f'{cx} {cy} {cz} {gc}\n')
