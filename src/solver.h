@@ -387,14 +387,14 @@ struct Solver {
         MPI_Comm_rank(MPI_COMM_WORLD, &mpi.rank);
 
         argparse::ArgumentParser parser;
-        parser.add_argument("dir")
+        parser.add_argument("case")
             .help("case directory");
         parser.add_argument("-c", "--clear")
             .flag()
             .help("delete existing output folder");
         parser.parse_args(argc, argv);
 
-        case_dir = std::filesystem::canonical(parser.get<std::string>("dir"));
+        case_dir = std::filesystem::canonical(parser.get<std::string>("case"));
         // if (setup_path.has_parent_path()) {
         //     std::filesystem::current_path(setup_path.parent_path());
         // }
