@@ -605,6 +605,13 @@ struct Solver {
         );
 
         if (mpi.rank == 0) {
+            write_mesh(
+                output_dir/"mesh.txt",
+                gmesh.x, gmesh.y, gmesh.z,
+                gmesh.dx, gmesh.dy, gmesh.dz,
+                gsize, gc
+            );
+
             printf("SETUP INFO\n");
             printf("\tcase directory = %s\n", case_dir.c_str());
 

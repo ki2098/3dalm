@@ -77,8 +77,8 @@ for k in range(cz - gc, cz):
 with open(dst_path, "w") as f:
     f.write(f'{cx} {cy} {cz} {gc}\n')
     for i in range(cx):
-        f.write(f'{x[i]:.6} {dx[i]:.6}\n')
+        f.write(f'{x[i]:.6}\n')
     for j in range(cy):
-        f.write(f'{y[j]:.6} {dy[j]:.6}\n')
+        f.write(f'{y[j]:.6}\n')
     for k in range(cz):
-        f.write(f'{z[k]:.6} {dz[k]:.6}\n')
+        f.write(f'{z[k]:.6}\n')
