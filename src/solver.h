@@ -388,7 +388,6 @@ struct Solver {
 
         argparse::ArgumentParser parser;
         parser.add_argument("dir")
-            .default_value(".")
             .help("case directory");
         parser.add_argument("-c", "--clear")
             .flag()
