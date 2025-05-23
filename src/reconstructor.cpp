@@ -18,19 +18,18 @@ void load_mesh(
     Real *&x, Real *&y, Real *&z
 ) {
     ifstream mesh_file(path);
-    Real dummy;
     mesh_file >> size[0] >> size[1] >> size[2] >> gc;
     x = new Real[size[0]];
     y = new Real[size[1]];
     z = new Real[size[2]];
     for (Int i = 0; i < size[0]; i ++) {
-        mesh_file >> x[i] >> dummy;
+        mesh_file >> x[i];
     }
     for (Int j = 0; j < size[1]; j ++) {
-        mesh_file >> y[j] >> dummy;
+        mesh_file >> y[j];
     }
     for (Int k = 0; k < size[2]; k ++) {
-        mesh_file >> z[k] >> dummy;
+        mesh_file >> z[k];
     }
 
 }
