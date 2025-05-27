@@ -10,6 +10,8 @@ prefix = sys.argv[1]
 
 files = glob.glob(prefix + "*")
 
+plt.switch_backend('tkagg')
+
 for f in files:
     csv = pd.read_csv(f)
     x = csv['Points:0'][0]

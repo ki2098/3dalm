@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import json
 import argparse
+# import tkinter
 
 parser = argparse.ArgumentParser()
 
@@ -17,6 +18,8 @@ if not ids:
     with open(f'{case_dir}/setup.json') as f:
         setup = json.load(f)
         ids = list(range(len(setup['monitor'])))
+
+# plt.switch_backend('tkagg')
 
 for id in ids:
     with open(f'{case_dir}/output/monitor{id}.csv') as f:
