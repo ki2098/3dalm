@@ -5,9 +5,9 @@
 #PJM --mpi proc=4
 #PJM -L elapse=3:00:00
 #PJM -j
-#PJM -o cases/plain_windtunnel_50/run.log
+#PJM -o run.log
 
 module load nvidia
 module load nvompi
 
-mpiexec -n 4 -display-map bin/windtunnel --clear cases/plain_windtunnel_50
+mpiexec -n 4 -display-map ../../bin/windtunnel --clear .
