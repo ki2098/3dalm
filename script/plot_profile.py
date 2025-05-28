@@ -8,9 +8,10 @@ import sys
 
 prefix = sys.argv[1]
 
-files = glob.glob(prefix + "*")
+files = glob.glob(prefix + "*.csv")
 
-plt.switch_backend('tkagg')
+# plt.switch_backend('tkagg')
+plt.figure(figsize=(5,10))
 
 for f in files:
     csv = pd.read_csv(f)
