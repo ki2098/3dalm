@@ -214,7 +214,7 @@ static void run_pbicgstab(
     it = 0;
     do {
         rho = calc_inner_product(r0, r, size, gc, mpi);
-        if (rho < FLT_MIN) {
+        if (fabs(rho) < FLT_MIN) {
             err = rho;
             break;
         }
@@ -285,7 +285,7 @@ static void run_pbicgstab(
     it = 0;
     do {
         rho = calc_inner_product(r0, r, size, gc, mpi);
-        if (rho < FLT_MIN) {
+        if (fabs(rho) < FLT_MIN) {
             err = rho;
             break;
         }
@@ -369,6 +369,7 @@ reduction(max:max_diag)
         Real dycs = y[j    ] - y[j - 1];
         Real dztc = z[k + 1] - z[k    ];
         Real dzcb = z[k    ] - z[k - 1];
+        /** coefficients for sor */
         // Real ae = 1/(dxc*dxec);
         // Real aw = 1/(dxc*dxcw);
         // Real an = 1/(dyc*dync);
@@ -376,6 +377,7 @@ reduction(max:max_diag)
         // Real at = 1/(dzc*dztc);
         // Real ab = 1/(dzc*dzcb);
         // Real ac = - (ae + aw + an + as + at + ab);
+        /** coefficients for cg */
         Real ae = (i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 0.;
         Real aw = (i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.;
         Real an = (j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.;
