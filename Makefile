@@ -2,7 +2,10 @@ cxx = g++
 cxxversion = $(shell $(cxx) -dumpversion)
 vtk_home = /opt/vtk/9.3
 
-windtunnel:
+.bin_dir:
+	mkdir bin
+
+windtunnel: .bin_dir
 	@echo gcc version = $(cxxversion)
 ifeq ($(shell expr $(cxxversion) \< 8), 1)
 	$(error needs gcc version 8 or above)
@@ -12,10 +15,10 @@ else
 	mpic++ src/windtunnel.cpp --std=c++17 -Wall -acc -Minfo -fast -o bin/windtunnel
 endif
 
-2vtk:
+2vtk: .bin_dir
 	g++ -O2 src/2vtk.cpp -I$(vtk_home)/include/vtk-9.3 -L$(vtk_home)/lib -lvtkIOXML-9.3 -lvtkIOXMLParser-9.3 -lvtkCommonExecutionModel-9.3 -lvtkCommonDataModel-9.3 -lvtkCommonTransforms-9.3 -lvtkCommonMath-9.3 -lvtkCommonCore-9.3 -lvtksys-9.3 -lvtkkissfft-9.3 -lvtkCommonColor-9.3 -o bin/2vtk
 
-reconstructor:
+reconstructor: .bin_dir
 ifeq ($(shell expr $(cxxversion) \< 8), 1)
 	$(error needs gcc version 8 or above)
 else ifeq ($(shell expr $(cxxversion) \= 8), 1)
