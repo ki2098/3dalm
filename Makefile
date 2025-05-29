@@ -3,7 +3,7 @@ cxxversion = $(shell $(cxx) -dumpversion)
 vtk_home = /opt/vtk/9.3
 
 .bin_dir:
-	mkdir bin
+	mkdir -p bin
 
 windtunnel: .bin_dir
 	@echo gcc version = $(cxxversion)
