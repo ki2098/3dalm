@@ -1,13 +1,13 @@
 {
     "runtime":{
         "dt":5e-4,
-        "time":120
+        "time":150
     },
 
     "output":{
-        "output_start_time":20,
+        "output_start_time":50,
         "output_interval_time":20,
-        "time_avg_start_time":20
+        "time_avg_start_time":50
     },
 
     "turbulence_grid":{
