@@ -81,3 +81,19 @@ static Real get_intersection(Real h1, Real t1, Real h2, Real t2) {
     Real x2 = t2 - h1;
     return fmax(0., fmin(l1, fmin(l2, fmin(x1, x2))));
 }
+
+template<typename T>
+Int find_nearest_index(T *arr, T value, Int len) {
+    if (value < arr[0]) {
+        return 0;
+    }
+    if (value >= arr[len - 1]) {
+        return len - 1;
+    }
+    for (Int i = 0; i < len - 1; i ++) {
+        if (arr[i] <= value && value < arr[i + 1]) {
+            return (value - arr[i] < arr[i + 1] - value)? i : i + 1;
+        }
+    }
+    return - 1;
+}

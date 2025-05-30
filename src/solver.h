@@ -51,7 +51,7 @@ static void set_turbulence_generating_grid(
     Real solid[],
     Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
-    Real thickness, Real spacing, Real placement,
+    Real tgg_thick, Real tgg_Mesh, Real tgg_bar, Real tgg_x,
     Int size[3], Int gc
 ) {
     Int len = size[0]*size[1]*size[2];
@@ -72,28 +72,28 @@ copyin(size[:3])
         Real x_intersection = get_intersection(
             xc - 0.5*dxc,
             xc + 0.5*dxc,
-            placement - 0.5*thickness,
-            placement + 0.5*thickness
+            tgg_x - 0.5*tgg_thick,
+            tgg_x + 0.5*tgg_thick
         );
         Real y_dist = fabs(yc);
         Real z_dist = fabs(zc);
 
-        Int bar_j_nearest = round(y_dist/spacing);
-        Real bar_y = bar_j_nearest*spacing;
+        Int bar_j_nearest = round(y_dist/tgg_Mesh);
+        Real bar_y = bar_j_nearest*tgg_Mesh;
         Real y_intersection = get_intersection(
             y_dist - 0.5*dyc,
             y_dist + 0.5*dyc,
-            bar_y - 0.5*thickness,
-            bar_y + 0.5*thickness
+            bar_y - 0.5*tgg_bar,
+            bar_y + 0.5*tgg_bar
         );
 
-        Int bar_k_nearest = round(z_dist/spacing);
-        Real bar_z = bar_k_nearest*spacing;
+        Int bar_k_nearest = round(z_dist/tgg_Mesh);
+        Real bar_z = bar_k_nearest*tgg_Mesh;
         Real z_intersection = get_intersection(
             z_dist - 0.5*dzc,
             z_dist + 0.5*dzc,
-            bar_z - 0.5*thickness,
-            bar_z + 0.5*thickness
+            bar_z - 0.5*tgg_bar,
+            bar_z + 0.5*tgg_bar
         );
 
         Real occupied = (
@@ -313,9 +313,9 @@ delete(r0[:len], p[:len], pp[:len], q[:len], s[:len], ss[:len], t[:len], tmp[:le
     }
 };
 
-struct Monitor {
-    Int i;
-    Real x;
+struct Probe {
+    Int i, j, k;
+    Real x, y, z;
     std::string path;
     bool active = false;
 
@@ -325,13 +325,19 @@ struct Monitor {
 
     void initialize(
         const std::string &path,
-        Int i, Real x, Int max_rec_cnt = 10000
+        Int i, Int j, Int k, Real x, Real y, Real z, Int max_rec_cnt = 10000
     ) {
         this->path = path;
         this->i = i;
+        this->j = j;
+        this->k = k;
         this->x = x;
+        this->y = y;
+        this->z = z;
         std::ofstream ofs(this->path);
-        ofs << "# x = " << this->x << std::endl;
+        ofs << "# " << this->x << " ";
+        ofs << this->y << " ";
+        ofs << this->z << std::endl;
         ofs << "t,I" << std::endl;
         active = true;
 
@@ -351,7 +357,7 @@ struct Monitor {
         }
     }
 
-    ~Monitor() {
+    ~Probe() {
         if (cur_rec_cnt > 0) {
             std::ofstream ofs(this->path, std::ios::app);
             for (int i = 0; i < cur_rec_cnt; i ++) {
@@ -379,7 +385,7 @@ struct Solver {
 
     OutHandler out_handler, tavg_out_handler;
 
-    std::vector<Monitor> monitors;
+    std::vector<Probe> probes;
 
     void initialize(int argc, char **argv) {        
         MPI_Init(&argc, &argv);
@@ -438,14 +444,15 @@ struct Solver {
         rt.output_interval_step = output_interval_time/rt.dt;
         rt.tavg_start_step = tavg_start_time/rt.dt;
 
-        Real tgg_thickness, tgg_spacing, tgg_placement;
+        Real tbb_bar, tgg_thick, tgg_Mesh, tgg_x;
         auto it_tgg_json = setup_json.find("turbulence_grid");
         bool there_is_tgg = (it_tgg_json != setup_json.end());
         if (there_is_tgg) {
             auto &tgg_json = *it_tgg_json;
-            tgg_thickness = tgg_json["thickness"];
-            tgg_spacing = tgg_json["spacing"];
-            tgg_placement = tgg_json["placement"];
+            tgg_thick = tgg_json["thick"];
+            tgg_Mesh = tgg_json["Mesh"];
+            tbb_bar = tgg_json["bar"];
+            tgg_x = tgg_json["x"];
         }
 
         auto &mesh_json = setup_json["mesh"];
@@ -475,30 +482,49 @@ struct Solver {
 
         // printf("%d eq OK\n", mpi.rank);
 
-        auto it_monitor_json = setup_json.find("monitor");
-        if (it_monitor_json != setup_json.end()) {
-            auto &monitors_json = *it_monitor_json;
-            monitors = std::vector<Monitor>(monitors_json.size());
-            for (Int m = 0; m < monitors.size(); m ++) {
-                auto &monitor_json = monitors_json[m];
-                Real monitor_x = monitor_json["x"];
+        auto it_probes_json = setup_json.find("probe");
+        if (it_probes_json != setup_json.end()) {
+            auto &probes_json = *it_probes_json;
+            probes = std::vector<Probe>(probes_json.size());
+            for (Int m = 0; m < probes.size(); m ++) {
+                auto &probe_json = probes_json[m];
+                Real probex = probe_json[0];
+                Real probey = probe_json[1];
+                Real probez = probe_json[2];
                 Real *x = mesh.x;
+                Real *y = mesh.y;
+                Real *z = mesh.z;
 
-                for (Int i = gc - 1; i < size[0] - gc; i ++) {
-                    if (x[i] <= monitor_x && x[i + 1] > monitor_x) {
-                        Int nearest_i = (
-                            monitor_x - x[i] < x[i + 1] - monitor_x
-                        )? i : i + 1;
-                        if (nearest_i >= gc && nearest_i < size[0] - gc) {
-                            monitors[m].initialize(
-                                output_dir/("monitor" + std::to_string(m) + ".csv"),
-                                nearest_i,
-                                x[nearest_i],
-                                rt.output_interval_step
-                            );
-                        }
-                        break;
-                    }
+                // for (Int i = gc - 1; i < size[0] - gc; i ++) {
+                //     if (x[i] <= probex && x[i + 1] > probex) {
+                //         neari = (
+                //             probex - x[i] < x[i + 1] - probex
+                //         )? i : i + 1;
+                //         if (nearest_i >= gc && nearest_i < size[0] - gc) {
+                //             probes[m].initialize(
+                //                 output_dir/("probe" + std::to_string(m) + ".csv"),
+                //                 nearest_i,
+                //                 x[nearest_i],
+                //                 rt.output_interval_step
+                //             );
+                //         }
+                //         break;
+                //     }
+                // }
+                Int neari = find_nearest_index(x + gc - 1, probex, size[0] - 2*gc + 2) + gc - 1;
+                Int nearj = find_nearest_index(y + gc - 1, probey, size[1] - 2*gc + 2) + gc - 1;
+                Int neark = find_nearest_index(z + gc - 1, probez, size[2] - 2*gc + 2) + gc - 1;
+                if (
+                    neari >= gc && neari < size[0] - gc
+                &&  nearj >= gc && nearj < size[1] - gc
+                &&  neark >= gc && neark < size[2] - gc
+                ) {
+                    probes[m].initialize(
+                        output_dir/("probe" + std::to_string(m) + ".csv"),
+                        neari, nearj, neark,
+                        x[neari], y[nearj], z[neark],
+                        rt.output_interval_step
+                    );
                 }
             }
         }
@@ -525,7 +551,7 @@ struct Solver {
                 cfd.solid,
                 mesh.x, mesh.y, mesh.z,
                 mesh.dx, mesh.dy, mesh.dz,
-                tgg_thickness, tgg_spacing, tgg_placement,
+                tgg_thick, tgg_Mesh, tbb_bar, tgg_x,
                 size, gc
             );
         } else {
@@ -645,9 +671,9 @@ struct Solver {
 
             printf("TURBULENCE GENERATING GRID INFO\n");
             if (there_is_tgg) {
-                printf("\tthickness = %lf\n", tgg_thickness);
-                printf("\tspacing = %lf\n", tgg_spacing);
-                printf("\tplacement = %lf\n", tgg_placement);
+                printf("\tthickness = %lf\n", tgg_thick);
+                printf("\tspacing = %lf\n", tgg_Mesh);
+                printf("\tplacement = %lf\n", tgg_x);
             } else {
                 printf("\tno turbulence generating grid specified\n");
             }
@@ -691,10 +717,12 @@ struct Solver {
                 printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
                 printf("\toffset = (%ld %ld %ld)\n", offset[0], offset[1], offset[2]);
                 printf("\tGPU id = %d\n", gpu_id);
-                printf("\tmonitors = \n");
-                for (auto &m : monitors) {
+                printf("\tprobes = \n");
+                for (auto &m : probes) {
                     if (m.active) {
-                        printf("\t\tx = %lf, local i = %ld\n", m.x, m.i);
+                        printf("\t\tposition = (%lf %lf %lf), local index = (%ld %ld %ld)\n",
+                        m.x, m.y, m.z,
+                        m.i, m.j, m.k);
                     }
                 }
                 fflush(stdout);
@@ -876,13 +904,18 @@ SKIP_TIME_INTEGRAL:
         }
 
         if (rt.step >= rt.output_start_step) {
-            for (auto &m : monitors) {
+            for (auto &m : probes) {
                 if (m.active) {
                     m.add_record(
                         rt.get_time(),
-                        calc_avg_monitor_I(
+                        // calc_avg_monitor_I(
+                        //     cfd.U, cfd.Uin,
+                        //     size, m.i, gc
+                        // )
+                        calc_monitor_I(
                             cfd.U, cfd.Uin,
-                            size, m.i, gc
+                            size,
+                            m.i, m.j, m.k
                         )
                     );
                 }

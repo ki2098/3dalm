@@ -767,3 +767,17 @@ reduction(+:total)
     Int effective_count = (size[1] - 2*gc)*(size[2] - 2*gc);
     return total/(Urefmag*effective_count);
 }
+
+static Real calc_monitor_I(
+    Real U[][3], Real Uref[3],
+    Int size[3], Int i, Int j, Int k
+) {
+    Int id = index(i, j, k, size);
+#pragma acc update host(U[id:1][0:3])
+    Real ufluc = U[id][0] - Uref[0];
+    Real vfluc = U[id][1] - Uref[1];
+    Real wfluc = U[id][2] - Uref[2];
+    Real fluc_rms = sqrt((ufluc*ufluc + vfluc*vfluc + wfluc*wfluc)/3.);
+    Real Urefmag = sqrt(Uref[0]*Uref[0] + Uref[1]*Uref[1] + Uref[2]*Uref[2]);
+    return fluc_rms/Urefmag;
+}
