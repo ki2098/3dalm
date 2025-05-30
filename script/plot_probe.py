@@ -10,10 +10,11 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('case', help='case directory')
 parser.add_argument('id', nargs='*', help='probe id, if not given, plot all the monitors')
-parser.add_argument('--ax', action='store_true', help='plot time averaged value over probes\' x-coordinate')
+parser.add_argument('--var', help='variable you want to plot')
 args = parser.parse_args()
 ids = args.id
 case_dir = args.case
+var = args.var
 
 if not ids:
     with open(f'{case_dir}/setup.json') as f:
@@ -22,24 +23,15 @@ if not ids:
 
 # plt.switch_backend('tkagg')
 
-if args.ax:
-    for id in ids:
-        with open(f'{case_dir}/output/probe{id}.csv') as f:
-            comment = f.readline()
-            comment = comment[1:].strip()
-            x = comment.split()[0]
-            csv = pd.read_csv(f, comment='#')
-            avgI = sum(csv['I'])/len(csv['I'])
-            plt.scatter(x, avgI)
-else:
-    for id in ids:
-        with open(f'{case_dir}/output/probe{id}.csv') as f:
-            comment = f.readline()
-            comment = comment[1:].strip()
-            csv = pd.read_csv(f, comment='#')
-            row_count = len(csv)
-            jump = row_count//200
-            plt.plot(csv['t'][::jump], csv['I'][::jump], label=f'probe@({comment})')
+
+for id in ids:
+    with open(f'{case_dir}/output/probe{id}.csv') as f:
+        comment = f.readline()
+        comment = comment[1:].strip()
+        csv = pd.read_csv(f, comment='#')
+        row_count = len(csv)
+        jump = row_count//1000
+        plt.plot(csv['t'][::jump], csv[var][::jump], label=f'probe@({comment})')
 
 plt.xlabel('t')
 plt.ylabel('I')

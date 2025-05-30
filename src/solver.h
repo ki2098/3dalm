@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <string>
 #include <openacc.h>
+#include <array>
 #include "json.hpp"
 #include "argparse.hpp"
 #include "io.h"
@@ -258,18 +259,21 @@ delete(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], 
 };
 
 struct Eq {
+    std::string method;
+
     Real (*A)[7];
     Real *b, *r;
     Real *r0, *p, *pp, *q, *s, *ss, *t, *tmp;
     Int it, max_it;
     Real err, tol;
     Real max_diag;
-    Real relax_rate = 1.2;
+    Real relax_rate = 1.5;
     Int pc_max_it = 5;
 
-    void initialize(Int max_it, Real tol, Int size[3]) {
+    void initialize(Int max_it, Real tol, Int size[3], const std::string &method) {
         this->max_it = max_it;
         this->tol = tol;
+        this->method = method;
 
         Int len = size[0]*size[1]*size[2];
         A = new Real[len][7];
@@ -321,7 +325,7 @@ struct Probe {
 
     Int max_rec_cnt;
     Int cur_rec_cnt = 0;
-    std::vector<std::pair<float, float>> recs;
+    std::vector<std::array<float, 4>> recs;
 
     void initialize(
         const std::string &path,
@@ -338,20 +342,23 @@ struct Probe {
         ofs << "# " << this->x << " ";
         ofs << this->y << " ";
         ofs << this->z << std::endl;
-        ofs << "t,I" << std::endl;
+        ofs << "t,u,v,w" << std::endl;
         active = true;
 
         this->max_rec_cnt = max_rec_cnt;
-        recs = std::vector<std::pair<float, float>>(max_rec_cnt);
+        recs = std::vector<std::array<float, 4>>(max_rec_cnt);
     }
 
-    void add_record(float t, float I) {
-        recs[cur_rec_cnt] = {t, I};
+    void add_record(float t, const std::array<float, 3> &U) {
+        recs[cur_rec_cnt] = {t, U[0], U[1], U[2]};
         cur_rec_cnt ++;
         if (cur_rec_cnt == max_rec_cnt) {
             std::ofstream ofs(this->path, std::ios::app);
             for (const auto &rec : recs) {
-                ofs << rec.first << "," << rec.second << std::endl;
+                ofs << rec[0] << ",";
+                ofs << rec[1] << ",";
+                ofs << rec[2] << ",";
+                ofs << rec[3] << std::endl;
             }
             cur_rec_cnt = 0;
         }
@@ -361,7 +368,11 @@ struct Probe {
         if (cur_rec_cnt > 0) {
             std::ofstream ofs(this->path, std::ios::app);
             for (int i = 0; i < cur_rec_cnt; i ++) {
-                ofs << recs[i].first << "," << recs[i].second << std::endl;
+                auto &rec = recs[i];
+                ofs << rec[0] << ",";
+                ofs << rec[1] << ",";
+                ofs << rec[2] << ",";
+                ofs << rec[3] << std::endl;
             }
         }
     }
@@ -478,7 +489,7 @@ struct Solver {
         auto &eq_json = setup_json["eq"];
         Real tol = eq_json["tolerance"];
         Real max_it = eq_json["max_iteration"];
-        eq.initialize(max_it, tol, size);
+        eq.initialize(max_it, tol, size, eq_json.value("method", "CG"));
 
         // printf("%d eq OK\n", mpi.rank);
 
@@ -530,13 +541,23 @@ struct Solver {
         }
         
 
-        eq.max_diag = build_A(
-            eq.A,
-            mesh.x, mesh.y, mesh.z,
-            mesh.dx, mesh.dy, mesh.dz,
-            gsize, size, offset, gc,
-            &mpi
-        );
+        if (eq.method == "CG") {
+            eq.max_diag = build_A_for_CG(
+                eq.A,
+                mesh.x, mesh.y, mesh.z,
+                mesh.dx, mesh.dy, mesh.dz,
+                gsize, size, offset, gc,
+                &mpi
+            );
+        } else if (eq.method == "SOR") {
+            eq.max_diag = build_A_for_SOR(
+                eq.A,
+                mesh.x, mesh.y, mesh.z,
+                mesh.dx, mesh.dy, mesh.dz,
+                gsize, size, offset, gc,
+                &mpi
+            );
+        }
 
         // printf("%d eq A OK\n", mpi.rank);
 
@@ -677,7 +698,6 @@ struct Solver {
             } else {
                 printf("\tno turbulence generating grid specified\n");
             }
-            
 
             printf("CFD INFO\n");
             printf("\tRe = %lf\n", cfd.Re);
@@ -689,6 +709,8 @@ struct Solver {
             printf("\tmax iteration = %ld\n", eq.max_it);
             printf("\ttolerance = %lf\n", eq.tol);
             printf("\tmax A diag = %lf\n", eq.max_diag);
+            printf("\tmethod = %s\n", eq.method.c_str());
+            
 
             json part_json;
             part_json["size"] = {gsize[0], gsize[1], gsize[2]};
@@ -790,20 +812,22 @@ struct Solver {
 
         // printf("3\n");
 
-        // run_sor(
-        //     eq.A, cfd.p, eq.b, eq.r,
-        //     eq.relax_rate, eq.it, eq.max_it, eq.err, eq.tol,
-        //     gsize, size, offset, gc,
-        //     &mpi
-        // );
-
-        run_pbicgstab(
-            eq.A, cfd.p, eq.b, eq.r,
-            eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
-            eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
-            gsize, size, gc,
-            &mpi
-        );
+        if (eq.method == "CG") {
+            run_pbicgstab(
+                eq.A, cfd.p, eq.b, eq.r,
+                eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
+                eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
+                gsize, size, gc,
+                &mpi
+            );
+        } else if (eq.method == "SOR") {
+            run_sor(
+                eq.A, cfd.p, eq.b, eq.r,
+                eq.relax_rate, eq.it, eq.max_it, eq.err, eq.tol,
+                gsize, size, offset, gc,
+                &mpi
+            );
+        }
 
         // run_pbicgstab(
         //     eq.A, cfd.p, eq.b, eq.r,
@@ -906,17 +930,11 @@ SKIP_TIME_INTEGRAL:
         if (rt.step >= rt.output_start_step) {
             for (auto &m : probes) {
                 if (m.active) {
+                    Int id = index(m.i, m.j, m.k, size);
+#pragma acc update host(cfd.U[id:1])
                     m.add_record(
                         rt.get_time(),
-                        // calc_avg_monitor_I(
-                        //     cfd.U, cfd.Uin,
-                        //     size, m.i, gc
-                        // )
-                        calc_monitor_I(
-                            cfd.U, cfd.Uin,
-                            size,
-                            m.i, m.j, m.k
-                        )
+                        {(float)cfd.U[id][0], (float)cfd.U[id][1], (float)cfd.U[id][2]}
                     );
                 }
             }

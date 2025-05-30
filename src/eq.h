@@ -341,7 +341,90 @@ present(r[:len], s[:len], t[:len])
     } while (it < max_it && err > tol);
 }
 
-static Real build_A(
+static Real build_A_for_SOR(
+    Real A[][7],
+    Real x[], Real y[], Real z[],
+    Real dx[], Real dy[], Real dz[],
+    Int gsize[3], Int size[3], Int offset[3], Int gc,
+    MpiInfo *mpi
+) {
+    Real max_diag = 0;
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(gsize[:3], size[:3], offset[:3]) \
+reduction(max:max_diag)
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int id = index(i, j, k, size);
+        Real dxc = dx[i];
+        Real dyc = dy[j];
+        Real dzc = dz[k];
+        Real dxec = x[i + 1] - x[i    ];
+        Real dxcw = x[i    ] - x[i - 1];
+        Real dync = y[j + 1] - y[j    ];
+        Real dycs = y[j    ] - y[j - 1];
+        Real dztc = z[k + 1] - z[k    ];
+        Real dzcb = z[k    ] - z[k - 1];
+        /** coefficients for sor */
+        Real ae = 1/(dxc*dxec);
+        Real aw = 1/(dxc*dxcw);
+        Real an = 1/(dyc*dync);
+        Real as = 1/(dyc*dycs);
+        Real at = 1/(dzc*dztc);
+        Real ab = 1/(dzc*dzcb);
+        Real ac = - (ae + aw + an + as + at + ab);
+        /** coefficients for cg */
+        // Real ae = (i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 0.;
+        // Real aw = (i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.;
+        // Real an = (j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.;
+        // Real as = (j + offset[1] > gc               )? 1./(dyc*dycs) : 0.;
+        // Real at = (k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.;
+        // Real ab = (k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.;
+        // Real ac = - (
+        //     ((i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 2./(dxc*dxc))
+        // +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.          )
+        // +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.          )
+        // +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.          )
+        // +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.          )
+        // +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.          )
+        // );
+        A[id][0] = ac;
+        A[id][1] = ae;
+        A[id][2] = aw;
+        A[id][3] = an;
+        A[id][4] = as;
+        A[id][5] = at;
+        A[id][6] = ab;
+        if (fabs(ac) > max_diag) {
+            max_diag = fabs(ac);
+        }
+    }}}
+
+    if (mpi->size > 1) {
+        MPI_Allreduce(MPI_IN_PLACE, &max_diag, 1, get_mpi_datatype<Real>(), MPI_MAX, MPI_COMM_WORLD);
+    }
+
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len]) \
+copyin(size[:3])
+    for (Int i = gc; i < size[0] - gc; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int id = index(i, j, k, size);
+#pragma acc loop seq
+        for (Int m = 0; m < 7; m ++) {
+            A[id][m] /= max_diag;
+        }
+    }}}
+
+    return max_diag;
+}
+
+static Real build_A_for_CG(
     Real A[][7],
     Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
