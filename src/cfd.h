@@ -172,6 +172,7 @@ static Real calc_diffusion(Real stencil[7], Real xyz[9], Real dxyz[3], Real visc
     return diffusion;
 }
 
+#pragma acc routine seq
 static void calc_intermediate_U_at_cell(
     Real U[][3], Real Uold[][3], Real JU[][3], Real nut[],
     Real x[], Real y[], Real z[],
@@ -248,8 +249,9 @@ static void calc_intermediate_U(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 2;
+    const Int thick = (mpi->size > 1)? 2 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -270,6 +272,24 @@ static void calc_intermediate_U(
 #pragma acc host_data use_device(Uold)
         MPI_Irecv(Uold[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], Uold[:len], JU[:len], nut[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        calc_intermediate_U_at_cell(
+            U, Uold, JU, nut,
+            x, y, z, dx, dy, dz,
+            Re, dt,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -281,7 +301,27 @@ static void calc_intermediate_U(
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
 
-    Int len = size[0]*size[1]*size[2];
+    /** for x- and x+ */
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], Uold[:len], JU[:len], nut[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        calc_intermediate_U_at_cell(
+            U, Uold, JU, nut,
+            x, y, z, dx, dy, dz,
+            Re, dt,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
+    /* Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
 present(U[:len], Uold[:len], JU[:len], nut[:len]) \
 present(x[:size[0]], y[:size[1]], z[:size[2]]) \
@@ -348,7 +388,35 @@ copyin(size[:3])
 
             U[idc][m] = Uold[idc][m] + dt*(- convection + diffusion);
         }
-    }}}
+    }}} */
+}
+
+#pragma acc routine seq
+static void interpolate_JU_at_cell(
+    Real U[][3], Real JU[][3],
+    Real dx[], Real dy[], Real dz[],
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc = index(i, j, k, size);
+
+    Int ide = index(i + 1, j, k, size);
+    Real yz = dy[j]*dz[k];
+    Real JUc = U[idc][0]*yz;
+    Real JUe = U[ide][0]*yz;
+    JU[idc][0] = 0.5*(JUc + JUe);
+
+    Int idn = index(i, j + 1, k, size);
+    Real xz = dx[i]*dz[k];
+    Real JVc = U[idc][1]*xz;
+    Real JVn = U[idn][1]*xz;
+    JU[idc][1] = 0.5*(JVc + JVn);
+
+    Int idt = index(i, j, k + 1, size);
+    Real xy = dx[i]*dy[j];
+    Real JWc = U[idc][2]*xy;
+    Real JWt = U[idt][2]*xy;
+    JU[idc][2] = 0.5*(JWc + JWt);
 }
 
 static void interpolate_JU(
@@ -357,8 +425,9 @@ static void interpolate_JU(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -379,6 +448,22 @@ static void interpolate_JU(
 #pragma acc host_data use_device(U)
         MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], JU[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc - 1 + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc - 1; j < size[1] - gc; j ++) {
+    for (Int k = gc - 1; k < size[2] - gc; k ++) {
+        interpolate_JU_at_cell(
+            U, JU,
+            dx, dy, dz,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -390,9 +475,24 @@ static void interpolate_JU(
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
 
-    Int len = size[0]*size[1]*size[2];
-
 #pragma acc kernels loop independent collapse(3) \
+present(U[:len], JU[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc - 1; j < size[1] - gc; j ++) {
+    for (Int k = gc - 1; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc + 1;
+        Int i = (s - thick + I)%s + gc - 1;
+        interpolate_JU_at_cell(
+            U, JU,
+            dx, dy, dz,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
+/* #pragma acc kernels loop independent collapse(3) \
 present(U[:len], JU[:len]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
@@ -418,7 +518,7 @@ copyin(size[:3])
         Real JWc = U[idc][2]*xy;
         Real JWt = U[idt][2]*xy;
         JU[idc][2] = 0.5*(JWc + JWt);
-    }}}
+    }}} */
 
 /* #pragma acc kernels loop independent collapse(3) \
 present(U[:len], JU[:len]) \
@@ -497,6 +597,26 @@ copyin(size[:3])
     }}}
 }
 
+#pragma acc routine seq
+static void project_p_at_cell(
+    Real U[][3], Real p[],
+    Real x[], Real y[], Real z[],
+    Real dt,
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc = index(i, j, k, size);
+    Int ide = index(i + 1, j, k, size);
+    Int idw = index(i - 1, j, k, size);
+    Int idn = index(i, j + 1, k, size);
+    Int ids = index(i, j - 1, k, size);
+    Int idt = index(i, j, k + 1, size);
+    Int idb = index(i, j, k - 1, size);
+    U[idc][0] -= dt*(p[ide] - p[idw])/(x[i + 1] - x[i - 1]);
+    U[idc][1] -= dt*(p[idn] - p[ids])/(y[j + 1] - y[j - 1]);
+    U[idc][2] -= dt*(p[idt] - p[idb])/(z[k + 1] - z[k - 1]);
+}
+
 static void project_p(
     Real U[][3], Real JU[][3], Real p[],
     Real x[], Real y[], Real z[],
@@ -505,8 +625,9 @@ static void project_p(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -527,6 +648,23 @@ static void project_p(
 #pragma acc host_data use_device(p)
         MPI_Irecv(&p[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 1, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], p[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        project_p_at_cell(
+            U, p,
+            x, y, z,
+            dt,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -537,11 +675,26 @@ static void project_p(
         MPI_Wait(&req[2], MPI_STATUS_IGNORE);
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
-/** FINISHED IN MAY 7 */
-
-    Int len = size[0]*size[1]*size[2];
 
 #pragma acc kernels loop independent collapse(3) \
+present(U[:len], p[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        project_p_at_cell(
+            U, p,
+            x, y, z,
+            dt,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
+/* #pragma acc kernels loop independent collapse(3) \
 present(U[:len], p[:len]) \
 present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 copyin(size[:3])
@@ -558,7 +711,7 @@ copyin(size[:3])
         U[idc][0] -= dt*(p[ide] - p[idw])/(x[i + 1] - x[i - 1]);
         U[idc][1] -= dt*(p[idn] - p[ids])/(y[j + 1] - y[j - 1]);
         U[idc][2] -= dt*(p[idt] - p[idb])/(z[k + 1] - z[k - 1]);
-    }}}
+    }}} */
 
 #pragma acc kernels loop independent collapse(3) \
 present(JU[:len], p[:len]) \
@@ -629,6 +782,48 @@ copyin(size[:3])
     }}} */
 }
 
+#pragma acc routine seq
+static void calc_nut_at_cell(
+    Real U[][3], Real nut[],
+    Real x[], Real y[], Real z[],
+    Real dx[], Real dy[], Real dz[],
+    Real Cs,
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc = index(i, j, k, size);
+    Int ide = index(i + 1, j, k, size);
+    Int idw = index(i - 1, j, k, size);
+    Int idn = index(i, j + 1, k, size);
+    Int ids = index(i, j - 1, k, size);
+    Int idt = index(i, j, k + 1, size);
+    Int idb = index(i, j, k - 1, size);
+    Real dxew = x[i + 1] - x[i - 1];
+    Real dyns = y[j + 1] - y[j - 1];
+    Real dztb = z[k + 1] - z[k - 1];
+    Real volume = dx[i]*dy[j]*dz[k];
+
+    Real dudx = (U[ide][0] - U[idw][0])/dxew;
+    Real dudy = (U[idn][0] - U[ids][0])/dyns;
+    Real dudz = (U[idt][0] - U[idb][0])/dztb;
+    Real dvdx = (U[ide][1] - U[idw][1])/dxew;
+    Real dvdy = (U[idn][1] - U[ids][1])/dyns;
+    Real dvdz = (U[idt][1] - U[idb][1])/dztb;
+    Real dwdx = (U[ide][2] - U[idw][2])/dxew;
+    Real dwdy = (U[idn][2] - U[ids][2])/dyns;
+    Real dwdz = (U[idt][2] - U[idb][2])/dztb;
+
+    Real s1 = 2*square(dudx);
+    Real s2 = 2*square(dvdy);
+    Real s3 = 2*square(dwdz);
+    Real s4 = square(dudy + dvdx);
+    Real s5 = square(dudz + dwdx);
+    Real s6 = square(dvdz + dwdy);
+    Real shear = sqrt(s1 + s2 + s3 + s4 + s5 + s6);
+    Real filter = cbrt(volume);
+    nut[idc] = square(Cs*filter)*shear;
+}
+
 static void calc_nut(
     Real U[][3], Real nut[],
     Real x[], Real y[], Real z[],
@@ -637,8 +832,9 @@ static void calc_nut(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -659,6 +855,24 @@ static void calc_nut(
 #pragma acc host_data use_device(U)
         MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], nut[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        calc_nut_at_cell(
+            U, nut,
+            x, y, z, dx, dy, dz,
+            Cs,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -670,8 +884,26 @@ static void calc_nut(
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
 
-    Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
+present(U[:len], nut[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        calc_nut_at_cell(
+            U, nut,
+            x, y, z, dx, dy, dz,
+            Cs,
+            size, gc,
+            i, j, k
+        );
+    }}} 
+
+/* #pragma acc kernels loop independent collapse(3) \
 present(U[:len], nut[:len]) \
 present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
@@ -710,7 +942,36 @@ copyin(size[:3])
         Real shear = sqrt(s1 + s2 + s3 + s4 + s5 + s6);
         Real filter = cbrt(volume);
         nut[idc] = square(Cs*filter)*shear;
-    }}}
+    }}} */
+}
+
+#pragma acc routine seq
+static void calc_q_at_cell(
+    Real U[][3], Real q[],
+    Real x[], Real y[], Real z[],
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc = index(i, j, k, size);
+    Int ide = index(i + 1, j, k, size);
+    Int idw = index(i - 1, j, k, size);
+    Int idn = index(i, j + 1, k, size);
+    Int ids = index(i, j - 1, k, size);
+    Int idt = index(i, j, k + 1, size);
+    Int idb = index(i, j, k - 1, size);
+    Real dxew = x[i + 1] - x[i - 1];
+    Real dyns = y[j + 1] - y[j - 1];
+    Real dztb = z[k + 1] - z[k - 1];
+    Real dudx = (U[ide][0] - U[idw][0])/dxew;
+    Real dudy = (U[idn][0] - U[ids][0])/dyns;
+    Real dudz = (U[idt][0] - U[idb][0])/dztb;
+    Real dvdx = (U[ide][1] - U[idw][1])/dxew;
+    Real dvdy = (U[idn][1] - U[ids][1])/dyns;
+    Real dvdz = (U[idt][1] - U[idb][1])/dztb;
+    Real dwdx = (U[ide][2] - U[idw][2])/dxew;
+    Real dwdy = (U[idn][2] - U[ids][2])/dyns;
+    Real dwdz = (U[idt][2] - U[idb][2])/dztb;
+    q[idc] = - 0.5*(dudx*dudx + dvdy*dvdy + dwdz*dwdz + 2*(dudy*dvdx + dudz*dwdx + dvdz*dwdy));
 }
 
 static void calc_q(
@@ -719,8 +980,9 @@ static void calc_q(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -741,6 +1003,22 @@ static void calc_q(
 #pragma acc host_data use_device(U)
         MPI_Irecv(U[recv_head_id], 3*count, get_mpi_datatype<Real>(), mpi->rank + 1, 0, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(U[:len], q[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        calc_q_at_cell(
+            U, q,
+            x, y, z,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -752,8 +1030,23 @@ static void calc_q(
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
 
-    Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
+present(U[:len], q[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        calc_q_at_cell(U, q,
+            x, y, z,
+            size, gc,
+            i, j, k
+        );
+    }}} 
+
+/* #pragma acc kernels loop independent collapse(3) \
 present(U[:len], q[:len]) \
 present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 copyin(size[:3])
@@ -780,7 +1073,7 @@ copyin(size[:3])
         Real dwdy = (U[idn][2] - U[ids][2])/dyns;
         Real dwdz = (U[idt][2] - U[idb][2])/dztb;
         q[idc] = - 0.5*(dudx*dudx + dvdy*dvdy + dwdz*dwdz + 2*(dudy*dvdx + dudz*dwdx + dvdz*dwdy));
-    }}}
+    }}} */
 }
 
 static void calc_divergence(

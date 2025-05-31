@@ -54,13 +54,47 @@ reduction(+:total)
     return sqrt(total);
 }
 
+#pragma acc routine seq
+static void calc_residual_at_cell(
+    Real A[][7], Real x[], Real b[], Real r[],
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc = index(i, j, k, size);
+    Int ide = index(i + 1, j, k, size);
+    Int idw = index(i - 1, j, k, size);
+    Int idn = index(i, j + 1, k, size);
+    Int ids = index(i, j - 1, k, size);
+    Int idt = index(i, j, k + 1, size);
+    Int idb = index(i, j, k - 1, size);
+
+    Real ac = A[idc][0];
+    Real ae = A[idc][1];
+    Real aw = A[idc][2];
+    Real an = A[idc][3];
+    Real as = A[idc][4];
+    Real at = A[idc][5];
+    Real ab = A[idc][6];
+
+    Real xc = x[idc];
+    Real xe = x[ide];
+    Real xw = x[idw];
+    Real xn = x[idn];
+    Real xs = x[ids];
+    Real xt = x[idt];
+    Real xb = x[idb];
+
+    r[idc] = b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb);
+}
+
 static void calc_residual(
     Real A[][7], Real x[], Real b[], Real r[],
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -81,6 +115,16 @@ static void calc_residual(
 #pragma acc host_data use_device(x)
         MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], b[:len], r[:len]) \
+copyin(size[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        calc_residual_at_cell(A, x, b, r, size, gc, i, j, k);
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -91,9 +135,19 @@ static void calc_residual(
         MPI_Wait(&req[2], MPI_STATUS_IGNORE);
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
-    
-    Int len = size[0]*size[1]*size[2];
+
 #pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], b[:len], r[:len]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        calc_residual_at_cell(A, x, b, r, size, gc, i, j, k);
+    }}}
+    
+/* #pragma acc kernels loop independent collapse(3) \
 present(A[:len], x[:len], b[:len], r[:len]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
@@ -124,7 +178,40 @@ copyin(size[:3])
         Real xb = x[idb];
 
         r[idc] = b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb);
-    }}}
+    }}} */
+}
+
+#pragma acc routine seq
+static void calc_Ax_at_cell(
+    Real A[][7], Real x[], Real y[],
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc = index(i, j, k, size);
+    Int ide = index(i + 1, j, k, size);
+    Int idw = index(i - 1, j, k, size);
+    Int idn = index(i, j + 1, k, size);
+    Int ids = index(i, j - 1, k, size);
+    Int idt = index(i, j, k + 1, size);
+    Int idb = index(i, j, k - 1, size);
+
+    Real ac = A[idc][0];
+    Real ae = A[idc][1];
+    Real aw = A[idc][2];
+    Real an = A[idc][3];
+    Real as = A[idc][4];
+    Real at = A[idc][5];
+    Real ab = A[idc][6];
+
+    Real xc = x[idc];
+    Real xe = x[ide];
+    Real xw = x[idw];
+    Real xn = x[idn];
+    Real xs = x[ids];
+    Real xt = x[idt];
+    Real xb = x[idb];
+
+    y[idc] = ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb;
 }
 
 static void calc_Ax(
@@ -132,8 +219,9 @@ static void calc_Ax(
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -154,6 +242,16 @@ static void calc_Ax(
 #pragma acc host_data use_device(x)
         MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], y[:len]) \
+copyin(size[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        calc_Ax_at_cell(A, x, y, size, gc, i, j, k);
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -165,8 +263,18 @@ static void calc_Ax(
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
 
-    Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], y[:len]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        calc_Ax_at_cell(A, x, y, size, gc, i, j, k);
+    }}}
+
+/* #pragma acc kernels loop independent collapse(3) \
 present(A[:len], x[:len], y[:len]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
@@ -197,7 +305,7 @@ copyin(size[:3])
         Real xb = x[idb];
 
         y[idc] = ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb;
-    }}}
+    }}} */
 }
 
 static void calc_ax_plus_by(

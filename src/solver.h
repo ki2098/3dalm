@@ -222,15 +222,15 @@ struct Cfd {
         this->Cs = Cs;
 
         Int len = size[0]*size[1]*size[2];
-        U = new Real[len][3];
-        Uold = new Real[len][3];
-        Utavg = new Real[len][3];
-        JU = new Real[len][3];
-        p = new Real[len];
-        nut = new Real[len];
-        q = new Real[len];
-        div = new Real[len];
-        solid = new Real[len];
+        U = new Real[len][3]();
+        Uold = new Real[len][3]();
+        Utavg = new Real[len][3]();
+        JU = new Real[len][3]();
+        p = new Real[len]();
+        nut = new Real[len]();
+        q = new Real[len]();
+        div = new Real[len]();
+        solid = new Real[len]();
 
 #pragma acc enter data \
 create(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len])
@@ -268,7 +268,7 @@ struct Eq {
     Real err, tol;
     Real max_diag;
     Real relax_rate = 1.5;
-    Int pc_max_it = 3;
+    Int pc_max_it = 5;
 
     void initialize(Int max_it, Real tol, Int size[3], const std::string &method) {
         this->max_it = max_it;
@@ -276,17 +276,17 @@ struct Eq {
         this->method = method;
 
         Int len = size[0]*size[1]*size[2];
-        A = new Real[len][7];
-        b = new Real[len];
-        r = new Real[len];
-        r0 = new Real[len];
-        p = new Real[len];
-        pp = new Real[len];
-        q = new Real[len];
-        s = new Real[len];
-        ss = new Real[len];
-        t = new Real[len];
-        tmp = new Real[len];
+        A = new Real[len][7]();
+        b = new Real[len]();
+        r = new Real[len]();
+        r0 = new Real[len]();
+        p = new Real[len]();
+        pp = new Real[len]();
+        q = new Real[len]();
+        s = new Real[len]();
+        ss = new Real[len]();
+        t = new Real[len]();
+        tmp = new Real[len]();
 
 #pragma acc enter data \
 create(A[:len], b[:len], r[:len]) \
@@ -749,6 +749,7 @@ struct Solver {
         for (Int rank = 0; rank < mpi.size; rank ++) {
             if (mpi.rank == rank) {
                 printf("PROC INFO %d/%d\n", mpi.rank, mpi.size);
+                printf("\tgsize = (%ld %ld %ld)\n", gsize[0], gsize[1], gsize[2]);
                 printf("\tsize = (%ld %ld %ld)\n", size[0], size[1], size[2]);
                 printf("\toffset = (%ld %ld %ld)\n", offset[0], offset[1], offset[2]);
                 printf("\tGPU id = %d\n", gpu_id);
@@ -833,6 +834,13 @@ struct Solver {
                 gsize, size, gc,
                 &mpi
             );
+            // run_pbicgstab(
+            //     eq.A, cfd.p, eq.b, eq.r,
+            //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t,
+            //     eq.it, eq.max_it, eq.err, eq.tol, eq.relax_rate, eq.pc_max_it,
+            //     gsize, size, offset, gc,
+            //     &mpi
+            // );
         } else if (eq.method == "SOR") {
             run_sor(
                 eq.A, cfd.p, eq.b, eq.r,
@@ -842,13 +850,7 @@ struct Solver {
             );
         }
 
-        // run_pbicgstab(
-        //     eq.A, cfd.p, eq.b, eq.r,
-        //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t,
-        //     eq.it, eq.max_it, eq.err, eq.tol, eq.relax_rate, eq.pc_max_it,
-        //     gsize, size, offset, gc,
-        //     &mpi
-        // );
+        
 
         // printf("4\n");
 

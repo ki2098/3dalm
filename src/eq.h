@@ -3,13 +3,49 @@
 #include <cfloat>
 #include "mv.h"
 
+#pragma acc routine seq
+static void sweep_jacobi_at_cell(
+    Real A[][7], Real x[], Real xold[], Real b[],
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc = index(i, j, k, size);
+    Int ide = index(i + 1, j, k, size);
+    Int idw = index(i - 1, j, k, size);
+    Int idn = index(i, j + 1, k, size);
+    Int ids = index(i, j - 1, k, size);
+    Int idt = index(i, j, k + 1, size);
+    Int idb = index(i, j, k - 1, size);
+
+    Real ac = A[idc][0];
+    Real ae = A[idc][1];
+    Real aw = A[idc][2];
+    Real an = A[idc][3];
+    Real as = A[idc][4];
+    Real at = A[idc][5];
+    Real ab = A[idc][6];
+
+    Real xc = xold[idc];
+    Real xe = xold[ide];
+    Real xw = xold[idw];
+    Real xn = xold[idn];
+    Real xs = xold[ids];
+    Real xt = xold[idt];
+    Real xb = xold[idb];
+
+    Real relaxation = (b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb))/ac;
+
+    x[idc] = xc + relaxation;
+}
+
 static void sweep_jacobi(
     Real A[][7], Real x[], Real xold[], Real b[],
     Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -30,6 +66,20 @@ static void sweep_jacobi(
 #pragma acc host_data use_device(xold)
         MPI_Irecv(&xold[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], xold[:len], b[:len]) \
+copyin(size[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        sweep_jacobi_at_cell(
+            A, x, xold, b,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -41,8 +91,22 @@ static void sweep_jacobi(
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
 
-    Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], xold[:len], b[:len]) \
+copyin(size[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        sweep_jacobi_at_cell(
+            A, x, xold, b,
+            size, gc,
+            i, j, k
+        );
+    }}}
+
+/* #pragma acc kernels loop independent collapse(3) \
 present(A[:len], x[:len], xold[:len], b[:len]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
@@ -75,7 +139,45 @@ copyin(size[:3])
         Real relaxation = (b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb))/ac;
 
         x[idc] = xc + relaxation;
-    }}}
+    }}} */
+}
+
+#pragma acc routine seq
+static void sweep_sor_at_cell(
+    Real A[][7], Real x[], Real b[],
+    Real relax_rate, Int color,
+    Int size[3], Int offset[3], Int gc,
+    Int i, Int j, Int k
+) {
+    if ((i + j + k + offset[0] + offset[1] + offset[2])%2 == color) {
+        Int idc = index(i, j, k, size);
+        Int ide = index(i + 1, j, k, size);
+        Int idw = index(i - 1, j, k, size);
+        Int idn = index(i, j + 1, k, size);
+        Int ids = index(i, j - 1, k, size);
+        Int idt = index(i, j, k + 1, size);
+        Int idb = index(i, j, k - 1, size);
+
+        Real ac = A[idc][0];
+        Real ae = A[idc][1];
+        Real aw = A[idc][2];
+        Real an = A[idc][3];
+        Real as = A[idc][4];
+        Real at = A[idc][5];
+        Real ab = A[idc][6];
+
+        Real xc = x[idc];
+        Real xe = x[ide];
+        Real xw = x[idw];
+        Real xn = x[idn];
+        Real xs = x[ids];
+        Real xt = x[idt];
+        Real xb = x[idb];
+
+        Real relaxation = (b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb))/ac;
+
+        x[idc] = xc + relax_rate*relaxation;
+    }
 }
 
 static void sweep_sor(
@@ -84,8 +186,9 @@ static void sweep_sor(
     Int size[3], Int offset[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     MPI_Request req[4];
-    const Int thick = 1;
+    const Int thick = (mpi->size > 1)? 1 : 0;
     /** exchange x- */
     if (mpi->rank > 0) {
         Int count = thick*size[1]*size[2];
@@ -106,6 +209,21 @@ static void sweep_sor(
 #pragma acc host_data use_device(x)
         MPI_Irecv(&x[recv_head_id], count, get_mpi_datatype<Real>(), mpi->rank + 1, 2, MPI_COMM_WORLD, &req[3]);
     }
+
+#pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], b[:len]) \
+copyin(size[:3], offset[:3])
+    for (Int i = gc + thick; i < size[0] - gc - thick; i ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        sweep_sor_at_cell(
+            A, x, b,
+            relax_rate, color,
+            size, offset, gc,
+            i, j, k
+        );
+    }}}
+
     /** wait x- */
     if (mpi->rank > 0) {
         MPI_Wait(&req[0], MPI_STATUS_IGNORE);
@@ -117,8 +235,23 @@ static void sweep_sor(
         MPI_Wait(&req[3], MPI_STATUS_IGNORE);
     }
 
-    Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
+present(A[:len], x[:len], b[:len]) \
+copyin(size[:3], offset[:3])
+    for (Int I = 0; I < 2*thick; I ++) {
+    for (Int j = gc; j < size[1] - gc; j ++) {
+    for (Int k = gc; k < size[2] - gc; k ++) {
+        Int s = size[0] - 2*gc;
+        Int i = (s - thick + I)%s + gc;
+        sweep_sor_at_cell(
+            A, x, b,
+            relax_rate, color,
+            size, offset, gc,
+            i, j, k
+        );
+    }}}
+
+/* #pragma acc kernels loop independent collapse(3) \
 present(A[:len], x[:len], b[:len]) \
 copyin(size[:3], offset[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
@@ -152,7 +285,7 @@ copyin(size[:3], offset[:3])
         Real relaxation = (b[idc] - (ac*xc + ae*xe + aw*xw + an*xn + as*xs + at*xt + ab*xb))/ac;
 
         x[idc] = xc + relax_rate*relaxation;
-    }}}}
+    }}}} */
 }
 
 static void run_sor(
@@ -210,6 +343,8 @@ static void run_pbicgstab(
     cpy_array(r0, r, len);
     Real alpha = 1, beta, omega = 1, rho, rhoold = 1;
     fill_array(q, 0., len);
+
+    // printf("%ld\n", effective_count);
 
     it = 0;
     do {
@@ -431,6 +566,11 @@ static Real build_A_for_CG(
     Int gsize[3], Int size[3], Int offset[3], Int gc,
     MpiInfo *mpi
 ) {
+    printf(
+        "%ld %ld %ld, %ld %ld %ld\n",
+        gsize[0], gsize[1], gsize[2],
+        offset[0], offset[1], offset[2]
+    );
     Real max_diag = 0;
     Int len = size[0]*size[1]*size[2];
 #pragma acc kernels loop independent collapse(3) \
@@ -453,28 +593,58 @@ reduction(max:max_diag)
         Real dztc = z[k + 1] - z[k    ];
         Real dzcb = z[k    ] - z[k - 1];
         /** coefficients for sor */
-        // Real ae = 1/(dxc*dxec);
-        // Real aw = 1/(dxc*dxcw);
-        // Real an = 1/(dyc*dync);
-        // Real as = 1/(dyc*dycs);
-        // Real at = 1/(dzc*dztc);
-        // Real ab = 1/(dzc*dzcb);
-        // Real ac = - (ae + aw + an + as + at + ab);
+        Real ae = 1/(dxc*dxec);
+        Real aw = 1/(dxc*dxcw);
+        Real an = 1/(dyc*dync);
+        Real as = 1/(dyc*dycs);
+        Real at = 1/(dzc*dztc);
+        Real ab = 1/(dzc*dzcb);
+        Real ac = - (ae + aw + an + as + at + ab);
         /** coefficients for cg */
-        Real ae = (i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 0.;
-        Real aw = (i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.;
-        Real an = (j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.;
-        Real as = (j + offset[1] > gc               )? 1./(dyc*dycs) : 0.;
-        Real at = (k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.;
-        Real ab = (k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.;
-        Real ac = - (
-            ((i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 2./(dxc*dxc))
-        +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.          )
-        +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.          )
-        +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.          )
-        +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.          )
-        +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.          )
-        );
+        // Int gi = i + offset[0];
+        // Int gj = j + offset[1];
+        // Int gk = k + offset[2];
+        // Real ae = 0, aw = 0, an = 0, as = 0, at = 0, ab = 0, ac = 0;
+        // if (gi < gsize[0] - gc - 1) {
+        //     ae = 1/(dxc*dxec);
+        //     ac -= ae;
+        // } else {
+        //     ac -= 2/(dxc*dxc);
+        // }
+        // if (gi > gc) {
+        //     aw = 1/(dxc*dxcw);
+        //     ac -= aw;
+        // }
+        // if (gj < gsize[1] - gc - 1) {
+        //     an = 1/(dyc*dync);
+        //     ac -= an;
+        // }
+        // if (gj > gc) {
+        //     as = 1/(dyc*dycs);
+        //     ac -= as;
+        // }
+        // if (gk < gsize[2] - gc - 1) {
+        //     at = 1/(dzc*dztc);
+        //     ac -= at;
+        // }
+        // if (gk > gc) {
+        //     ab = 1/(dzc*dzcb);
+        //     ac -= ab;
+        // }
+        // Real ae = (i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 0.;
+        // Real aw = (i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.;
+        // Real an = (j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.;
+        // Real as = (j + offset[1] > gc               )? 1./(dyc*dycs) : 0.;
+        // Real at = (k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.;
+        // Real ab = (k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.;
+        // Real ac = - (
+        //     ((i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 2./(dxc*dxc))
+        // +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.          )
+        // +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.          )
+        // +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.          )
+        // +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.          )
+        // +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.          )
+        // );
         A[id][0] = ac;
         A[id][1] = ae;
         A[id][2] = aw;
