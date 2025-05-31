@@ -268,7 +268,7 @@ struct Eq {
     Real err, tol;
     Real max_diag;
     Real relax_rate = 1.5;
-    Int pc_max_it = 3;
+    Int pc_max_it = 5;
 
     void initialize(Int max_it, Real tol, Int size[3], const std::string &method) {
         this->max_it = max_it;
@@ -827,20 +827,20 @@ struct Solver {
         // printf("3\n");
 
         if (eq.method == "CG") {
-            run_pbicgstab(
-                eq.A, cfd.p, eq.b, eq.r,
-                eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
-                eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
-                gsize, size, gc,
-                &mpi
-            );
             // run_pbicgstab(
             //     eq.A, cfd.p, eq.b, eq.r,
-            //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t,
-            //     eq.it, eq.max_it, eq.err, eq.tol, eq.relax_rate, eq.pc_max_it,
-            //     gsize, size, offset, gc,
+            //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
+            //     eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
+            //     gsize, size, gc,
             //     &mpi
             // );
+            run_pbicgstab(
+                eq.A, cfd.p, eq.b, eq.r,
+                eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t,
+                eq.it, eq.max_it, eq.err, eq.tol, eq.relax_rate, eq.pc_max_it,
+                gsize, size, offset, gc,
+                &mpi
+            );
         } else if (eq.method == "SOR") {
             run_sor(
                 eq.A, cfd.p, eq.b, eq.r,
