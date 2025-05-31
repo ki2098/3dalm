@@ -172,6 +172,74 @@ static Real calc_diffusion(Real stencil[7], Real xyz[9], Real dxyz[3], Real visc
     return diffusion;
 }
 
+static void calc_intermediate_U_at_cell(
+    Real U[][3], Real Uold[][3], Real JU[][3], Real nut[],
+    Real x[], Real y[], Real z[],
+    Real dx[], Real dy[], Real dz[],
+    Real Re, Real dt,
+    Int size[3], Int gc,
+    Int i, Int j, Int k
+) {
+    Int idc  = index(i, j, k, size);
+    Int ide  = index(i + 1, j, k, size);
+    Int idee = index(i + 2, j, k, size);
+    Int idw  = index(i - 1, j, k, size);
+    Int idww = index(i - 2, j, k, size);
+    Int idn  = index(i, j + 1, k, size);
+    Int idnn = index(i, j + 2, k, size);
+    Int ids  = index(i, j - 1, k, size);
+    Int idss = index(i, j - 2, k, size);
+    Int idt  = index(i, j, k + 1, size);
+    Int idtt = index(i, j, k + 2, size);
+    Int idb  = index(i, j, k - 1, size);
+    Int idbb = index(i, j, k - 2, size);
+    Real dxyz[] = {dx[i], dy[j], dz[k]};
+    Real xyz[] = {
+        x[i], x[i + 1], x[i - 1],
+        y[j], y[j + 1], y[j - 1],
+        z[k], z[k + 1], z[k - 1]
+    };
+    Real viscosity = 1/Re + nut[idc];
+    Real JU_stencil[] = {
+        JU[idc][0], JU[idw][0],
+        JU[idc][1], JU[ids][1],
+        JU[idc][2], JU[idb][2]
+    };
+
+#pragma acc loop seq
+    for (Int m = 0; m < 3; m ++) {
+        Real convection_stencil[] = {
+            Uold[idc ][m],
+            Uold[ide ][m],
+            Uold[idee][m],
+            Uold[idw ][m],
+            Uold[idww][m],
+            Uold[idn ][m],
+            Uold[idnn][m],
+            Uold[ids ][m],
+            Uold[idss][m],
+            Uold[idt ][m],
+            Uold[idtt][m],
+            Uold[idb ][m],
+            Uold[idbb][m],
+        };
+        Real convection = calc_convection_muscl(convection_stencil, JU_stencil, dxyz);
+
+        Real diffusion_stencil[] = {
+            Uold[idc ][m],
+            Uold[ide ][m],
+            Uold[idw ][m],
+            Uold[idn ][m],
+            Uold[ids ][m],
+            Uold[idt ][m],
+            Uold[idb ][m],
+        };
+        Real diffusion = calc_diffusion(diffusion_stencil, xyz, dxyz, viscosity);
+
+        U[idc][m] = Uold[idc][m] + dt*(- convection + diffusion);
+    }
+}
+
 static void calc_intermediate_U(
     Real U[][3], Real Uold[][3], Real JU[][3], Real nut[],
     Real x[], Real y[], Real z[],
@@ -329,6 +397,34 @@ present(U[:len], JU[:len]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
     for (Int i = gc - 1; i < size[0] - gc; i ++) {
+    for (Int j = gc - 1; j < size[1] - gc; j ++) {
+    for (Int k = gc - 1; k < size[2] - gc; k ++) {
+        Int idc = index(i, j, k, size);
+
+        Int ide = index(i + 1, j, k, size);
+        Real yz = dy[j]*dz[k];
+        Real JUc = U[idc][0]*yz;
+        Real JUe = U[ide][0]*yz;
+        JU[idc][0] = 0.5*(JUc + JUe);
+
+        Int idn = index(i, j + 1, k, size);
+        Real xz = dx[i]*dz[k];
+        Real JVc = U[idc][1]*xz;
+        Real JVn = U[idn][1]*xz;
+        JU[idc][1] = 0.5*(JVc + JVn);
+
+        Int idt = index(i, j, k + 1, size);
+        Real xy = dx[i]*dy[j];
+        Real JWc = U[idc][2]*xy;
+        Real JWt = U[idt][2]*xy;
+        JU[idc][2] = 0.5*(JWc + JWt);
+    }}}
+
+/* #pragma acc kernels loop independent collapse(3) \
+present(U[:len], JU[:len]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc - 1; i < size[0] - gc; i ++) {
     for (Int j = gc    ; j < size[1] - gc; j ++) {
     for (Int k = gc    ; k < size[2] - gc; k ++) {
         Int idc = index(i, j, k, size);
@@ -337,9 +433,9 @@ copyin(size[:3])
         Real JUc = U[idc][0]*yz;
         Real JUe = U[ide][0]*yz;
         JU[idc][0] = 0.5*(JUc + JUe);
-    }}}
+    }}} */
 
-#pragma acc kernels loop independent collapse(3) \
+/* #pragma acc kernels loop independent collapse(3) \
 present(U[:len], JU[:len]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
@@ -352,9 +448,9 @@ copyin(size[:3])
         Real JVc = U[idc][1]*xz;
         Real JVn = U[idn][1]*xz;
         JU[idc][1] = 0.5*(JVc + JVn);
-    }}}
+    }}} */
 
-#pragma acc kernels loop independent collapse(3) \
+/* #pragma acc kernels loop independent collapse(3) \
 present(U[:len], JU[:len]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
@@ -367,7 +463,7 @@ copyin(size[:3])
         Real JWc = U[idc][2]*xy;
         Real JWt = U[idt][2]*xy;
         JU[idc][2] = 0.5*(JWc + JWt);
-    }}}
+    }}} */
 }
 
 static void calc_poisson_rhs(
@@ -466,6 +562,32 @@ copyin(size[:3])
 
 #pragma acc kernels loop independent collapse(3) \
 present(JU[:len], p[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
+copyin(size[:3])
+    for (Int i = gc - 1; i < size[0] - gc; i ++) {
+    for (Int j = gc - 1; j < size[1] - gc; j ++) {
+    for (Int k = gc - 1; k < size[2] - gc; k ++) {
+        Int idc = index(i, j, k, size);
+
+        Int ide = index(i + 1, j, k, size);
+        Real yz = dy[j]*dz[k];
+        Real dpdx = (p[ide] - p[idc])/(x[i + 1] - x[i]);
+        JU[idc][0] -= dt*yz*dpdx;
+
+        Int idn = index(i, j + 1, k, size);
+        Real xz = dx[i]*dz[k];
+        Real dpdy = (p[idn] - p[idc])/(y[j + 1] - y[j]);
+        JU[idc][1] -= dt*xz*dpdy;
+
+        Int idt = index(i, j, k + 1, size);
+        Real xy = dx[i]*dy[j];
+        Real dpdz = (p[idt] - p[idc])/(z[k + 1] - z[k]);
+        JU[idc][2] -= dt*xy*dpdz;
+    }}}
+
+/* #pragma acc kernels loop independent collapse(3) \
+present(JU[:len], p[:len]) \
 present(x[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
     for (Int i = gc - 1; i < size[0] - gc; i ++) {
@@ -476,9 +598,9 @@ copyin(size[:3])
         Real yz = dy[j]*dz[k];
         Real dpdx = (p[ide] - p[idc])/(x[i + 1] - x[i]);
         JU[idc][0] -= dt*yz*dpdx;
-    }}}
+    }}} */
 
-#pragma acc kernels loop independent collapse(3) \
+/* #pragma acc kernels loop independent collapse(3) \
 present(JU[:len], p[:len]) \
 present(dx[:size[0]], y[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
@@ -490,9 +612,9 @@ copyin(size[:3])
         Real xz = dx[i]*dz[k];
         Real dpdy = (p[idn] - p[idc])/(y[j + 1] - y[j]);
         JU[idc][1] -= dt*xz*dpdy;
-    }}}
+    }}} */
 
-#pragma acc kernels loop independent collapse(3) \
+/* #pragma acc kernels loop independent collapse(3) \
 present(JU[:len], p[:len]) \
 present(dx[:size[0]], dy[:size[1]], z[:size[2]]) \
 copyin(size[:3])
@@ -504,7 +626,7 @@ copyin(size[:3])
         Real xy = dx[i]*dy[j];
         Real dpdz = (p[idt] - p[idc])/(z[k + 1] - z[k]);
         JU[idc][2] -= dt*xy*dpdz;
-    }}}
+    }}} */
 }
 
 static void calc_nut(
