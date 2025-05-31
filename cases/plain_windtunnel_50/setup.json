@@ -1,18 +1,18 @@
 {
     "runtime":{
         "dt":5e-4,
-        "time":150
+        "time":1250
     },
 
     "output":{
         "output_start_time":50,
-        "output_interval_time":20,
+        "output_interval_time":1200,
         "time_avg_start_time":50
     },
 
     "turbulence_grid":{
         "bar":0.09,
-        "Mesh":0.315,
+        "Mesh":0.402,
         "thick":0.06,
         "x":0
     },
@@ -35,7 +35,7 @@
     },
 
     "cfd":{
-        "Re":2.5e5,
+        "Re":338800,
         "Cs":0.1
     },
     

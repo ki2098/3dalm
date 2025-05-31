@@ -9,8 +9,8 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument('case', help='case directory')
+parser.add_argument('var', help='variable you want to plot')
 parser.add_argument('id', nargs='*', help='probe id, if not given, plot all the monitors')
-parser.add_argument('--var', help='variable you want to plot')
 args = parser.parse_args()
 ids = args.id
 case_dir = args.case

@@ -575,6 +575,19 @@ struct Solver {
                 tgg_thick, tgg_Mesh, tbb_bar, tgg_x,
                 size, gc
             );
+            // OutHandler tgg_out_handler;
+            // tgg_out_handler.set_size(size, gc);
+            // tgg_out_handler.set_var(
+            //     {cfd.solid},
+            //     {1},
+            //     {"solid"}
+            // );
+            // tgg_out_handler.update_host();
+            // write_binary(
+            //     output_dir/make_rank_binary_filename("solid", mpi.rank, rt.step),
+            //     &tgg_out_handler,
+            //     mesh.x, mesh.y, mesh.z
+            // );
         } else {
             fill_array(cfd.solid, 0., len);
         }
