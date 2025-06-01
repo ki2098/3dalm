@@ -436,7 +436,6 @@ present(p[:len], r[:len], q[:len])
         }
 
         fill_array(pp, 0., len);
-        // run_jacobi_pc(A, pp, tmp, p, pc_max_it, size, gc, mpi);
         run_sor_pc(A, pp, p, pc_relax_rate, pc_max_it, size, offset, gc, mpi);
         calc_Ax(A, pp, q, size, gc, mpi);
 
@@ -449,7 +448,6 @@ present(s[:len], r[:len], q[:len])
         }
 
         fill_array(ss, 0., len);
-        // run_jacobi_pc(A, ss, tmp, s, pc_max_it, size, gc, mpi);
         run_sor_pc(A, ss, s, pc_relax_rate, pc_max_it, size, offset, gc, mpi);
         calc_Ax(A, ss, t, size, gc, mpi);
 
