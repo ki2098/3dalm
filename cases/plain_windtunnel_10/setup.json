@@ -41,7 +41,6 @@
     
     "eq":{
         "tolerance":1e-3,
-        "max_iteration":1000,
-        "method":"SOR"
+        "max_iteration":1000
     }
 }

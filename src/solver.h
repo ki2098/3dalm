@@ -52,7 +52,7 @@ static void set_turbulence_generating_grid(
     Real solid[],
     Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
-    Real tgg_thick, Real tgg_Mesh, Real tgg_bar, Real tgg_x,
+    Real tgg_thick, Real tgg_mesh, Real tgg_bar, Real tgg_x,
     Int size[3], Int gc
 ) {
     Int len = size[0]*size[1]*size[2];
@@ -79,8 +79,8 @@ copyin(size[:3])
         Real y_dist = fabs(yc);
         Real z_dist = fabs(zc);
 
-        Int bar_j_nearest = round(y_dist/tgg_Mesh);
-        Real bar_y = bar_j_nearest*tgg_Mesh;
+        Int bar_j_nearest = round(y_dist/tgg_mesh);
+        Real bar_y = bar_j_nearest*tgg_mesh;
         Real y_intersection = get_intersection(
             y_dist - 0.5*dyc,
             y_dist + 0.5*dyc,
@@ -88,8 +88,8 @@ copyin(size[:3])
             bar_y + 0.5*tgg_bar
         );
 
-        Int bar_k_nearest = round(z_dist/tgg_Mesh);
-        Real bar_z = bar_k_nearest*tgg_Mesh;
+        Int bar_k_nearest = round(z_dist/tgg_mesh);
+        Real bar_z = bar_k_nearest*tgg_mesh;
         Real z_intersection = get_intersection(
             z_dist - 0.5*dzc,
             z_dist + 0.5*dzc,
@@ -259,7 +259,7 @@ delete(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], 
 };
 
 struct Eq {
-    std::string method;
+    std::string method, pc_method;
 
     Real (*A)[7];
     Real *b, *r;
@@ -267,8 +267,9 @@ struct Eq {
     Int it, max_it;
     Real err, tol;
     Real max_diag;
-    Real relax_rate = 1.5;
-    Int pc_max_it = 5;
+    Real relax_rate;
+    Real pc_relax_rate;
+    Int pc_max_it;
 
     void initialize(Int max_it, Real tol, Int size[3], const std::string &method) {
         this->max_it = max_it;
@@ -455,13 +456,13 @@ struct Solver {
         rt.output_interval_step = output_interval_time/rt.dt;
         rt.tavg_start_step = tavg_start_time/rt.dt;
 
-        Real tbb_bar, tgg_thick, tgg_Mesh, tgg_x;
+        Real tbb_bar, tgg_thick, tgg_mesh, tgg_x;
         auto it_tgg_json = setup_json.find("turbulence_grid");
         bool there_is_tgg = (it_tgg_json != setup_json.end());
         if (there_is_tgg) {
             auto &tgg_json = *it_tgg_json;
             tgg_thick = tgg_json["thick"];
-            tgg_Mesh = tgg_json["Mesh"];
+            tgg_mesh = tgg_json["mesh"];
             tbb_bar = tgg_json["bar"];
             tgg_x = tgg_json["x"];
         }
@@ -489,7 +490,17 @@ struct Solver {
         auto &eq_json = setup_json["eq"];
         Real tol = eq_json["tolerance"];
         Real max_it = eq_json["max_iteration"];
-        eq.initialize(max_it, tol, size, eq_json.value("method", "CG"));
+        eq.initialize(max_it, tol, size, eq_json["method"]);
+        if (eq.method == "BiCG") {
+            auto &pc_json = eq_json["preconditioner"];
+            eq.pc_method = pc_json["method"];
+            eq.pc_max_it = pc_json["max_iteration"];
+            if (eq.pc_method == "SOR") {
+                eq.pc_relax_rate = pc_json["relaxation_rate"];
+            }
+        } else if (eq.method == "SOR") {
+            eq.relax_rate = eq_json["relaxation_rate"];
+        }
 
         // printf("%d eq OK\n", mpi.rank);
 
@@ -541,8 +552,8 @@ struct Solver {
         }
         
 
-        if (eq.method == "CG") {
-            eq.max_diag = build_A_for_CG(
+        /* if (eq.method == "BiCG") {
+            eq.max_diag = build_A_for_BiCG(
                 eq.A,
                 mesh.x, mesh.y, mesh.z,
                 mesh.dx, mesh.dy, mesh.dz,
@@ -557,7 +568,14 @@ struct Solver {
                 gsize, size, offset, gc,
                 &mpi
             );
-        }
+        } */
+       eq.max_diag = build_A(
+            eq.A,
+            mesh.x, mesh.y, mesh.z,
+            mesh.dx, mesh.dy, mesh.dz,
+            gsize, size, offset, gc,
+            &mpi
+        );
 
         // printf("%d eq A OK\n", mpi.rank);
 
@@ -572,7 +590,7 @@ struct Solver {
                 cfd.solid,
                 mesh.x, mesh.y, mesh.z,
                 mesh.dx, mesh.dy, mesh.dz,
-                tgg_thick, tgg_Mesh, tbb_bar, tgg_x,
+                tgg_thick, tgg_mesh, tbb_bar, tgg_x,
                 size, gc
             );
             // OutHandler tgg_out_handler;
@@ -706,7 +724,7 @@ struct Solver {
             printf("TURBULENCE GENERATING GRID INFO\n");
             if (there_is_tgg) {
                 printf("\tthickness = %lf\n", tgg_thick);
-                printf("\tspacing = %lf\n", tgg_Mesh);
+                printf("\tspacing = %lf\n", tgg_mesh);
                 printf("\tplacement = %lf\n", tgg_x);
             } else {
                 printf("\tno turbulence generating grid specified\n");
@@ -723,7 +741,16 @@ struct Solver {
             printf("\ttolerance = %lf\n", eq.tol);
             printf("\tmax A diag = %lf\n", eq.max_diag);
             printf("\tmethod = %s\n", eq.method.c_str());
-            
+            if (eq.method == "SOR") {
+                printf("\trelaxation rate = %lf\n", eq.relax_rate);
+            } else if (eq.method == "BiCG") {
+                printf("PRECONDITIONER INFO\n");
+                printf("\tmethod = %s\n", eq.pc_method.c_str());
+                printf("\tmax iteration = %ld\n", eq.pc_max_it);
+                if (eq.pc_method == "SOR") {
+                    printf("\trelaxation rate = %lf\n", eq.pc_relax_rate);
+                }
+            }
 
             json part_json;
             part_json["size"] = {gsize[0], gsize[1], gsize[2]};
@@ -826,21 +853,24 @@ struct Solver {
 
         // printf("3\n");
 
-        if (eq.method == "CG") {
-            // run_pbicgstab(
-            //     eq.A, cfd.p, eq.b, eq.r,
-            //     eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
-            //     eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
-            //     gsize, size, gc,
-            //     &mpi
-            // );
-            run_pbicgstab(
-                eq.A, cfd.p, eq.b, eq.r,
-                eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t,
-                eq.it, eq.max_it, eq.err, eq.tol, eq.relax_rate, eq.pc_max_it,
-                gsize, size, offset, gc,
-                &mpi
-            );
+        if (eq.method == "BiCG") {
+            if (eq.pc_method == "SOR") {
+                run_pbicgstab(
+                    eq.A, cfd.p, eq.b, eq.r,
+                    eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t,
+                    eq.it, eq.max_it, eq.err, eq.tol, eq.pc_relax_rate, eq.pc_max_it,
+                    gsize, size, offset, gc,
+                    &mpi
+                );
+            } else if (eq.pc_method == "Jacobi") {
+                run_pbicgstab(
+                    eq.A, cfd.p, eq.b, eq.r,
+                    eq.r0, eq.p, eq.pp, eq.q, eq.s, eq.ss, eq.t, eq.tmp,
+                    eq.it, eq.max_it, eq.err, eq.tol, eq.pc_max_it,
+                    gsize, size, gc,
+                    &mpi
+                );
+            }
         } else if (eq.method == "SOR") {
             run_sor(
                 eq.A, cfd.p, eq.b, eq.r,

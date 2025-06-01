@@ -1,18 +1,18 @@
 {
     "runtime":{
         "dt":5e-4,
-        "time":1250
+        "time":1
     },
 
     "output":{
         "output_start_time":50,
-        "output_interval_time":600,
+        "output_interval_time":20,
         "time_avg_start_time":50
     },
 
     "turbulence_grid":{
         "bar":0.09,
-        "Mesh":0.402,
+        "mesh":0.402,
         "thick":0.06,
         "x":0
     },
@@ -42,6 +42,7 @@
     "eq":{
         "tolerance":1e-3,
         "max_iteration":1000,
-        "method":"SOR"
+        "method":"SOR",
+        "relaxation_rate":1.5
     }
 }
