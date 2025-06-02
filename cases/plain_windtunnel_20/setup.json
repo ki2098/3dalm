@@ -42,7 +42,11 @@
     "eq":{
         "tolerance":1e-3,
         "max iteration":1000,
-        "method":"SOR",
-        "relaxation rate":1.5
+        "method":"BiCG",
+        "preconditioner":{
+            "method":"SOR",
+            "max iteration":4,
+            "relaxation rate":1.1
+        }
     }
 }

@@ -1,16 +1,16 @@
 {
     "runtime":{
-        "dt":5e-4,
+        "dt":1e-3,
         "time":1250
     },
 
     "output":{
-        "output_start_time":50,
-        "output_interval_time":600,
-        "time_avg_start_time":50
+        "output start time":50,
+        "output interval time":20,
+        "time avg start time":50
     },
 
-    "turbulence_grid":{
+    "turbulence grid":{
         "bar":0.09,
         "mesh":0.402,
         "thick":0.06,
@@ -41,8 +41,12 @@
     
     "eq":{
         "tolerance":1e-3,
-        "max_iteration":1000,
-        "method":"SOR",
-        "relaxation_rate":1.5
+        "max iteration":1000,
+        "method":"BiCG",
+        "preconditioner":{
+            "method":"SOR",
+            "max iteration":4,
+            "relaxation rate":1.1
+        }
     }
 }
