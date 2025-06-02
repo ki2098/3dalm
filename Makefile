@@ -5,14 +5,14 @@ vtk_home = /opt/vtk/9.3
 .bin_dir:
 	mkdir -p bin
 
-windtunnel: .bin_dir
+solver: .bin_dir
 	@echo gcc version = $(cxxversion)
 ifeq ($(shell expr $(cxxversion) \< 8), 1)
 	$(error needs gcc version 8 or above)
 else ifeq ($(shell expr $(cxxversion) \= 8), 1)
-	mpic++ src/windtunnel.cpp --std=c++17 -Wall -acc -Minfo -fast -lstdc++fs -o bin/windtunnel
+	mpic++ src/solver.cpp --std=c++17 -Wall -acc -Minfo -fast -lstdc++fs -o bin/solver
 else 
-	mpic++ src/windtunnel.cpp --std=c++17 -Wall -acc -Minfo -fast -o bin/windtunnel
+	mpic++ src/solver.cpp --std=c++17 -Wall -acc -Minfo -fast -o bin/solver
 endif
 
 2vtk: .bin_dir
@@ -27,4 +27,4 @@ else
 	g++ src/reconstructor.cpp -O2 -o bin/reconstructor
 endif
 
-all: windtunnel 2vtk reconstructor
+all: solver 2vtk reconstructor

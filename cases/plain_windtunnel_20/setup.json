@@ -45,7 +45,7 @@
         "method":"BiCG",
         "preconditioner":{
             "method":"SOR",
-            "max iteration":4,
+            "max iteration":5,
             "relaxation rate":1.1
         }
     }
