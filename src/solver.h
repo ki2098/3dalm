@@ -70,39 +70,63 @@ copyin(size[:3])
         Real dxc = dx[i];
         Real dyc = dy[j];
         Real dzc = dz[k];
-        Real x_intersection = get_intersection(
-            xc - 0.5*dxc,
-            xc + 0.5*dxc,
-            tgg_x - 0.5*tgg_thick,
-            tgg_x + 0.5*tgg_thick
-        );
+        // Real x_intersection = get_intersection(
+        //     xc - 0.5*dxc,
+        //     xc + 0.5*dxc,
+        //     tgg_x - 0.5*tgg_thick,
+        //     tgg_x + 0.5*tgg_thick
+        // );
         Real y_dist = fabs(yc);
         Real z_dist = fabs(zc);
 
+        // Int bar_j_nearest = round(y_dist/tgg_mesh);
+        // Real bar_y = bar_j_nearest*tgg_mesh;
+        // Real y_intersection = get_intersection(
+        //     y_dist - 0.5*dyc,
+        //     y_dist + 0.5*dyc,
+        //     bar_y - 0.5*tgg_bar,
+        //     bar_y + 0.5*tgg_bar
+        // );
+
+        // Int bar_k_nearest = round(z_dist/tgg_mesh);
+        // Real bar_z = bar_k_nearest*tgg_mesh;
+        // Real z_intersection = get_intersection(
+        //     z_dist - 0.5*dzc,
+        //     z_dist + 0.5*dzc,
+        //     bar_z - 0.5*tgg_bar,
+        //     bar_z + 0.5*tgg_bar
+        // );
+
+        // Real occupied = (
+        //     y_intersection*dzc +
+        //     z_intersection*dyc -
+        //     y_intersection*z_intersection
+        // )*x_intersection;
+
+        Real x_intersec_vertical = get_intersection(
+            xc - 0.5*dxc, xc + 0.5*dxc,
+            tgg_x - tgg_thick, tgg_x
+        );
         Int bar_j_nearest = round(y_dist/tgg_mesh);
         Real bar_y = bar_j_nearest*tgg_mesh;
-        Real y_intersection = get_intersection(
-            y_dist - 0.5*dyc,
-            y_dist + 0.5*dyc,
-            bar_y - 0.5*tgg_bar,
-            bar_y + 0.5*tgg_bar
+        Real y_intersec = get_intersection(
+            y_dist - 0.5*dyc, y_dist + 0.5*dyc,
+            bar_y - 0.5*tgg_bar, bar_y + 0.5*tgg_bar
         );
 
+        Real x_intersec_horizontal = get_intersection(
+            xc - 0.5*dxc, xc + 0.5*dxc,
+            tgg_x - 2*tgg_thick, tgg_x - tgg_thick
+        );
+        
         Int bar_k_nearest = round(z_dist/tgg_mesh);
         Real bar_z = bar_k_nearest*tgg_mesh;
-        Real z_intersection = get_intersection(
-            z_dist - 0.5*dzc,
-            z_dist + 0.5*dzc,
-            bar_z - 0.5*tgg_bar,
-            bar_z + 0.5*tgg_bar
+        Real z_intersec = get_intersection(
+            z_dist - 0.5*dzc, z_dist + 0.5*dzc,
+            bar_z - 0.5*tgg_bar, bar_z + 0.5*tgg_bar
         );
 
-        Real occupied = (
-            y_intersection*dzc +
-            z_intersection*dyc -
-            y_intersection*z_intersection
-        )*x_intersection;
-        
+        Real occupied = x_intersec_vertical*y_intersec*dzc + x_intersec_horizontal*z_intersec*dyc;
         solid[index(i, j, k, size)] = occupied/(dxc*dyc*dzc);
     }}}
 }
@@ -449,15 +473,15 @@ struct Solver {
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
-        Real output_start_time = output_json["output_start_time"];
-        Real output_interval_time = output_json["output_interval_time"];
-        Real tavg_start_time = output_json["time_avg_start_time"];
+        Real output_start_time = output_json["output start time"];
+        Real output_interval_time = output_json["output interval time"];
+        Real tavg_start_time = output_json["time avg start time"];
         rt.output_start_step = output_start_time/rt.dt;
         rt.output_interval_step = output_interval_time/rt.dt;
         rt.tavg_start_step = tavg_start_time/rt.dt;
 
         Real tbb_bar, tgg_thick, tgg_mesh, tgg_x;
-        auto it_tgg_json = setup_json.find("turbulence_grid");
+        auto it_tgg_json = setup_json.find("turbulence grid");
         bool there_is_tgg = (it_tgg_json != setup_json.end());
         if (there_is_tgg) {
             auto &tgg_json = *it_tgg_json;
@@ -489,17 +513,17 @@ struct Solver {
 
         auto &eq_json = setup_json["eq"];
         Real tol = eq_json["tolerance"];
-        Real max_it = eq_json["max_iteration"];
+        Real max_it = eq_json["max iteration"];
         eq.initialize(max_it, tol, size, eq_json["method"]);
         if (eq.method == "BiCG") {
             auto &pc_json = eq_json["preconditioner"];
             eq.pc_method = pc_json["method"];
-            eq.pc_max_it = pc_json["max_iteration"];
+            eq.pc_max_it = pc_json["max iteration"];
             if (eq.pc_method == "SOR") {
-                eq.pc_relax_rate = pc_json["relaxation_rate"];
+                eq.pc_relax_rate = pc_json["relaxation rate"];
             }
         } else if (eq.method == "SOR") {
-            eq.relax_rate = eq_json["relaxation_rate"];
+            eq.relax_rate = eq_json["relaxation rate"];
         }
 
         // printf("%d eq OK\n", mpi.rank);
@@ -593,19 +617,19 @@ struct Solver {
                 tgg_thick, tgg_mesh, tbb_bar, tgg_x,
                 size, gc
             );
-            // OutHandler tgg_out_handler;
-            // tgg_out_handler.set_size(size, gc);
-            // tgg_out_handler.set_var(
-            //     {cfd.solid},
-            //     {1},
-            //     {"solid"}
-            // );
-            // tgg_out_handler.update_host();
-            // write_binary(
-            //     output_dir/make_rank_binary_filename("solid", mpi.rank, rt.step),
-            //     &tgg_out_handler,
-            //     mesh.x, mesh.y, mesh.z
-            // );
+            OutHandler tgg_out_handler;
+            tgg_out_handler.set_size(size, gc);
+            tgg_out_handler.set_var(
+                {cfd.solid},
+                {1},
+                {"solid"}
+            );
+            tgg_out_handler.update_host();
+            write_binary(
+                output_dir/make_rank_binary_filename("solid", mpi.rank, rt.step),
+                &tgg_out_handler,
+                mesh.x, mesh.y, mesh.z
+            );
         } else {
             fill_array(cfd.solid, 0., len);
         }
