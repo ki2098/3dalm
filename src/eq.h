@@ -727,58 +727,44 @@ reduction(max:max_diag)
         Real dztc = z[k + 1] - z[k    ];
         Real dzcb = z[k    ] - z[k - 1];
         /** coefficients for sor */
-        // Real ae = 1/(dxc*dxec);
-        // Real aw = 1/(dxc*dxcw);
-        // Real an = 1/(dyc*dync);
-        // Real as = 1/(dyc*dycs);
-        // Real at = 1/(dzc*dztc);
-        // Real ab = 1/(dzc*dzcb);
-        // Real ac = - (ae + aw + an + as + at + ab);
+        Real ae = 1/(dxc*dxec);
+        Real aw = 1/(dxc*dxcw);
+        Real an = 1/(dyc*dync);
+        Real as = 1/(dyc*dycs);
+        Real at = 1/(dzc*dztc);
+        Real ab = 1/(dzc*dzcb);
+        Real ac = - (ae + aw + an + as + at + ab);
         /** coefficients for cg */
-        Int gi = i + offset[0];
-        Int gj = j + offset[1];
-        Int gk = k + offset[2];
-        Real ae = 0, aw = 0, an = 0, as = 0, at = 0, ab = 0, ac = 0;
-        if (gi < gsize[0] - gc - 1) {
-            ae = 1/(dxc*dxec);
-            ac -= ae;
-        } else {
-            ac -= 2/(dxc*dxc);
-        }
-        if (gi > gc) {
-            aw = 1/(dxc*dxcw);
-            ac -= aw;
-        }
-        if (gj < gsize[1] - gc - 1) {
-            an = 1/(dyc*dync);
-            ac -= an;
-        }
-        if (gj > gc) {
-            as = 1/(dyc*dycs);
-            ac -= as;
-        }
-        if (gk < gsize[2] - gc - 1) {
-            at = 1/(dzc*dztc);
-            ac -= at;
-        }
-        if (gk > gc) {
-            ab = 1/(dzc*dzcb);
-            ac -= ab;
-        }
-        // Real ae = (i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 0.;
-        // Real aw = (i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.;
-        // Real an = (j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.;
-        // Real as = (j + offset[1] > gc               )? 1./(dyc*dycs) : 0.;
-        // Real at = (k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.;
-        // Real ab = (k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.;
-        // Real ac = - (
-        //     ((i + offset[0] < gsize[0] - gc - 1)? 1./(dxc*dxec) : 2./(dxc*dxc))
-        // +   ((i + offset[0] > gc               )? 1./(dxc*dxcw) : 0.          )
-        // +   ((j + offset[1] < gsize[1] - gc - 1)? 1./(dyc*dync) : 0.          )
-        // +   ((j + offset[1] > gc               )? 1./(dyc*dycs) : 0.          )
-        // +   ((k + offset[2] < gsize[2] - gc - 1)? 1./(dzc*dztc) : 0.          )
-        // +   ((k + offset[2] > gc               )? 1./(dzc*dzcb) : 0.          )
-        // );
+        // Int gi = i + offset[0];
+        // Int gj = j + offset[1];
+        // Int gk = k + offset[2];
+        // Real ae = 0, aw = 0, an = 0, as = 0, at = 0, ab = 0, ac = 0;
+        // if (gi < gsize[0] - gc - 1) {
+        //     ae = 1/(dxc*dxec);
+        //     ac -= ae;
+        // } else {
+        //     ac -= 2/(dxc*dxc);
+        // }
+        // if (gi > gc) {
+        //     aw = 1/(dxc*dxcw);
+        //     ac -= aw;
+        // }
+        // if (gj < gsize[1] - gc - 1) {
+        //     an = 1/(dyc*dync);
+        //     ac -= an;
+        // }
+        // if (gj > gc) {
+        //     as = 1/(dyc*dycs);
+        //     ac -= as;
+        // }
+        // if (gk < gsize[2] - gc - 1) {
+        //     at = 1/(dzc*dztc);
+        //     ac -= at;
+        // }
+        // if (gk > gc) {
+        //     ab = 1/(dzc*dzcb);
+        //     ac -= ab;
+        // }
         A[id][0] = ac;
         A[id][1] = ae;
         A[id][2] = aw;

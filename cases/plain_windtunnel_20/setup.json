@@ -1,12 +1,12 @@
 {
     "runtime":{
         "dt":1e-3,
-        "time":50
+        "time":150
     },
 
     "output":{
         "output start time":50,
-        "output interval time":20,
+        "output interval time":50,
         "time avg start time":50
     },
 
@@ -42,11 +42,7 @@
     "eq":{
         "tolerance":1e-3,
         "max iteration":1000,
-        "method":"BiCG",
-        "preconditioner":{
-            "method":"SOR",
-            "max iteration":5,
-            "relaxation rate":1.1
-        }
+        "method":"SOR",
+        "relaxation rate":1.2
     }
 }

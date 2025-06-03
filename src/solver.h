@@ -76,8 +76,8 @@ copyin(size[:3])
         //     tgg_x - 0.5*tgg_thick,
         //     tgg_x + 0.5*tgg_thick
         // );
-        Real y_dist = fabs(yc);
-        Real z_dist = fabs(zc);
+        // Real y_dist = fabs(yc);
+        // Real z_dist = fabs(zc);
 
         // Int bar_j_nearest = round(y_dist/tgg_mesh);
         // Real bar_y = bar_j_nearest*tgg_mesh;
@@ -103,14 +103,17 @@ copyin(size[:3])
         //     y_intersection*z_intersection
         // )*x_intersection;
 
+        Real tgg_center_y = 0;
+        Real tgg_center_z = 0;
+
         Real x_intersec_vertical = get_intersection(
             xc - 0.5*dxc, xc + 0.5*dxc,
             tgg_x - tgg_thick, tgg_x
         );
-        Int bar_j_nearest = round(y_dist/tgg_mesh);
-        Real bar_y = bar_j_nearest*tgg_mesh;
+        Int bar_j_nearest = round((yc - tgg_center_y)/tgg_mesh);
+        Real bar_y = bar_j_nearest*tgg_mesh + tgg_center_y;
         Real y_intersec = get_intersection(
-            y_dist - 0.5*dyc, y_dist + 0.5*dyc,
+            yc - 0.5*dyc, yc + 0.5*dyc,
             bar_y - 0.5*tgg_bar, bar_y + 0.5*tgg_bar
         );
 
@@ -119,10 +122,10 @@ copyin(size[:3])
             tgg_x - 2*tgg_thick, tgg_x - tgg_thick
         );
         
-        Int bar_k_nearest = round(z_dist/tgg_mesh);
-        Real bar_z = bar_k_nearest*tgg_mesh;
+        Int bar_k_nearest = round((zc - tgg_center_z)/tgg_mesh);
+        Real bar_z = bar_k_nearest*tgg_mesh + tgg_center_z;
         Real z_intersec = get_intersection(
-            z_dist - 0.5*dzc, z_dist + 0.5*dzc,
+            zc - 0.5*dzc, zc + 0.5*dzc,
             bar_z - 0.5*tgg_bar, bar_z + 0.5*tgg_bar
         );
 
@@ -630,8 +633,6 @@ struct Solver {
                 &tgg_out_handler,
                 mesh.x, mesh.y, mesh.z
             );
-        } else {
-            fill_array(cfd.solid, 0., len);
         }
         
 
@@ -960,13 +961,6 @@ struct Solver {
             &mpi
         );
 
-        calc_q(
-            cfd.U, cfd.q,
-            mesh.x, mesh.y, mesh.z,
-            size, gc,
-            &mpi
-        );
-
         calc_divergence(
             cfd.JU, cfd.div,
             mesh.dx, mesh.dy, mesh.dz,
@@ -1009,6 +1003,12 @@ SKIP_TIME_INTEGRAL:
             }
 
             if ((rt.step - rt.output_start_step)%rt.output_interval_step == 0) {
+                calc_q(
+                    cfd.U, cfd.q,
+                    mesh.x, mesh.y, mesh.z,
+                    size, gc,
+                    &mpi
+                );
                 out_handler.update_host();
                 write_binary(
                     output_dir/make_rank_binary_filename("inst", mpi.rank, rt.step),

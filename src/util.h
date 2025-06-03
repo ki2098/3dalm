@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <cstdlib>
 #include "type.h"
 
 #pragma acc routine seq
@@ -15,6 +16,12 @@ Int index(Int i, Int j, Int k, Int size[3]) {
 template<typename T>
 T square(T x) {
     return x*x;
+}
+
+#pragma acc routine seq
+template<typename T>
+T cubic(T x) {
+    return x*x*x;
 }
 
 template<typename T>
@@ -96,4 +103,69 @@ Int find_nearest_index(T *arr, T value, Int len) {
         }
     }
     return - 1;
+}
+
+template<typename T>
+Int find_floor_index(T *arr, T value, Int len) {
+    if (value < arr[0]) {
+        return - 1;
+    }
+    if (value >= arr[len - 1]) {
+        return len - 1;
+    }
+    for (Int i = 0; i < len - 1; i ++) {
+        if (arr[i] <= value && value < arr[i + 1]) {
+            return i;
+        }
+    }
+    return - 1;
+}
+
+Int euclid_mod(Int x, Int y) {
+    Int r = x%y;
+    if (r < 0) {
+        r += abs(y);
+    }
+    return r;
+}
+
+Real euclid_fmod(Real x, Real y) {
+    Real r = fmod(x, y);
+    if (r < 0) {
+        r += fabs(y);
+    }
+    return r;
+}
+
+Real linear_interpolate(
+    Real v0, Real v1,
+    Real x0, Real x1,
+    Real xp
+) {
+    Real fx = (xp - x0)/(x1 - x0);
+    return v0*(1 - fx) + v1*fx;
+}
+
+Real trilinear_interpolate(
+    Real v0, Real v1, Real v2, Real v3, Real v4, Real v5, Real v6, Real v7,
+    Real x0, Real x1,
+    Real y0, Real y1,
+    Real z0, Real z1,
+    Real xp, Real yp, Real zp
+) {
+    Real fx = (xp - x0)/(x1 - x0);
+    Real fy = (yp - y0)/(y1 - y0);
+    Real fz = (zp - z0)/(z1 - z0);
+
+    Real v01 = v0*(1 - fx) + v1*fx;
+    Real v23 = v2*(1 - fx) + v3*fx;
+    Real v45 = v4*(1 - fx) + v5*fx;
+    Real v67 = v6*(1 - fx) + v7*fx;
+
+    Real v0123 = v01*(1 - fy) + v23*fy;
+    Real v4567 = v45*(1 - fy) + v67*fy;
+
+    Real vp = v0123*(1 - fz) + v4567*fz;
+
+    return vp;
 }

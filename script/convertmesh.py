@@ -7,7 +7,9 @@ src_dir = sys.argv[1]
 dst_path = sys.argv[2]
 gc = 2
 
-os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+dirname = os.path.dirname(dst_path)
+if dirname:
+    os.makedirs(dirname, exist_ok=True)
 
 def build_coordinate(path):
     with open(path) as f:
