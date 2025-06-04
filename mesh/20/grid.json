@@ -33,28 +33,12 @@
 		"Equal": [
 			{
 				"Label": "Equal_y_01",
-				"Begin": -2.6,
-				"End": 2.6,
-				"Division": 104
+				"Begin": -3.6,
+				"End": 3.6,
+				"Division": 144
 			}
 		],
 		"Stretch": [
-			{
-				"Label": "Stretch_y_01",
-				"Begin": -3.6,
-				"End": -2.6,
-				"Begin_width": 0.1,
-				"End_width": 0.05,
-				"Division":15
-			},
-			{
-				"Label": "Stretch_y_02",
-				"Begin": 2.6,
-				"End": 3.6,
-				"Begin_width": 0.05,
-				"End_width": 0.1,
-				"Division":15
-			}
 		]
 	},
 	"z_axis": {
@@ -69,7 +53,7 @@
 				"End": 0.5,
 				"Begin_width": 0.01,
 				"End_width": 0.05,
-				"Division": 24
+				"Division": 19
 			},
 			{
 				"Label": "Stretch_z_02",

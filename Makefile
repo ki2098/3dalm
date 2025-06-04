@@ -27,4 +27,8 @@ else
 	g++ src/reconstructor.cpp -O2 -o bin/reconstructor
 endif
 
+hellors: .bin_dir
+	cargo build --manifest-path src/reconstructor/Cargo.toml --release
+	cp src/reconstructor/target/release/reconstructor bin/hellors
+
 all: solver 2vtk reconstructor

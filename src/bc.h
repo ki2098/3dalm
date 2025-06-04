@@ -4,6 +4,7 @@
 
 static void apply_Ubc(
     Real U[][3], Real Uold[][3], Real Uin[3],
+    Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
     Real dt,
     Int size[3], Int gc,
@@ -53,105 +54,176 @@ copyin(size[:3])
     /** y- slip */
 #pragma acc kernels loop independent collapse(2) \
 present(U[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
-        Int ji  = gc;
-        Int jii = gc + 1;
-        Int jo  = gc - 1;
-        Int joo = gc - 2;
-        Int idi  = index(i, ji , k, size);
-        Int idii = index(i, jii, k, size);
-        Int ido  = index(i, jo , k, size);
-        Int idoo = index(i, joo, k, size);
-        Real hi  = 0.5*dy[ji ];
-        Real hii = 0.5*dy[jii] + dy[ji];
-        Real ho  = 0.5*dy[jo ];
-        Real hoo = 0.5*dy[joo] + dy[jo];
-        Real Ubc[] = {U[idi][0], 0, U[idi][2]};
+        Int j0 = gc + 1;
+        Int j1 = gc;
+        Int j3 = gc - 1;
+        Int j4 = gc - 2;
+        Int id0 = index(i, j0, k, size);
+        Int id1 = index(i, j1, k, size);
+        Int id3 = index(i, j3, k, size);
+        Int id4 = index(i, j4, k, size);
+        Real y0 = y[j0];
+        Real y1 = y[j1];
+        Real y2 = y[j1] - 0.5*dy[j1];
+        Real y3 = y[j3];
+        Real y4 = y[j4];
+        Real Ubc[] = {U[id1][0], 0, U[id1][2]};
         for (Int m = 0; m < 3; m ++) {
-            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
-            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+            Real f0 = U[id0][m];
+            Real f1 = U[id1][m];
+            Real f2 = Ubc[m];
+            U[id3][m] = quadratic_polynomial(y0, y1, y2, f0, f1, f2, y3);
+            U[id4][m] = quadratic_polynomial(y0, y1, y2, f0, f1, f2, y4);
         }
     }}
 
     /** y+ slip */
 #pragma acc kernels loop independent collapse(2) \
 present(U[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
-        Int ji  = size[1] - gc - 1;
-        Int jii = size[1] - gc - 2;
-        Int jo  = size[1] - gc;
-        Int joo = size[1] - gc + 1;
-        Int idi  = index(i, ji , k, size);
-        Int idii = index(i, jii, k, size);
-        Int ido  = index(i, jo , k, size);
-        Int idoo = index(i, joo, k, size);
-        Real hi  = 0.5*dy[ji ];
-        Real hii = 0.5*dy[jii] + dy[ji];
-        Real ho  = 0.5*dy[jo ];
-        Real hoo = 0.5*dy[joo] + dy[jo];
-        Real Ubc[] = {U[idi][0], 0, U[idi][2]};
+        Int j0 = size[1] - gc - 2;
+        Int j1 = size[1] - gc - 1;
+        Int j3 = size[1] - gc;
+        Int j4 = size[1] - gc + 1;
+        Int id0 = index(i, j0, k, size);
+        Int id1 = index(i, j1, k, size);
+        Int id3 = index(i, j3, k, size);
+        Int id4 = index(i, j4, k, size);
+        Real y0 = y[j0];
+        Real y1 = y[j1];
+        Real y2 = y[j1] + 0.5*dy[j1];
+        Real y3 = y[j3];
+        Real y4 = y[j4];
+        Real Ubc[] = {U[id1][0], 0, U[id1][2]};
         for (Int m = 0; m < 3; m ++) {
-            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
-            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+            Real f0 = U[id0][m];
+            Real f1 = U[id1][m];
+            Real f2 = Ubc[m];
+            U[id3][m] = quadratic_polynomial(y0, y1, y2, f0, f1, f2, y3);
+            U[id4][m] = quadratic_polynomial(y0, y1, y2, f0, f1, f2, y4);
         }
+        // Int ji  = size[1] - gc - 1;
+        // Int jii = size[1] - gc - 2;
+        // Int jo  = size[1] - gc;
+        // Int joo = size[1] - gc + 1;
+        // Int idi  = index(i, ji , k, size);
+        // Int idii = index(i, jii, k, size);
+        // Int ido  = index(i, jo , k, size);
+        // Int idoo = index(i, joo, k, size);
+        // Real hi  = 0.5*dy[ji ];
+        // Real hii = 0.5*dy[jii] + dy[ji];
+        // Real ho  = 0.5*dy[jo ];
+        // Real hoo = 0.5*dy[joo] + dy[jo];
+        // Real Ubc[] = {U[idi][0], 0, U[idi][2]};
+        // for (Int m = 0; m < 3; m ++) {
+        //     U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
+        //     U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+        // }
     }}
 
     /** z- non slip */
 #pragma acc kernels loop independent collapse(2) \
 present(U[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
-        Int ki  = gc;
-        Int kii = gc + 1;
-        Int ko  = gc - 1;
-        Int koo = gc - 2;
-        Int idi  = index(i, j, ki , size);
-        Int idii = index(i, j, kii, size);
-        Int ido  = index(i, j, ko , size);
-        Int idoo = index(i, j, koo, size);
-        Real hi  = 0.5*dz[ki ];
-        Real hii = 0.5*dz[kii] + dz[ki];
-        Real ho  = 0.5*dz[ko ];
-        Real hoo = 0.5*dz[koo] + dz[ko];
+        Int k0 = gc + 1;
+        Int k1 = gc;
+        Int k3 = gc - 1;
+        Int k4 = gc - 2;
+        Int id0 = index(i, j, k0, size);
+        Int id1 = index(i, j, k1, size);
+        Int id3 = index(i, j, k3, size);
+        Int id4 = index(i, j, k4, size);
+        Real z0 = z[k0];
+        Real z1 = z[k1];
+        Real z2 = z[k1] - 0.5*dz[k1];
+        Real z3 = z[k3];
+        Real z4 = z[k4];
         Real Ubc[] = {0, 0, 0};
         for (Int m = 0; m < 3; m ++) {
-            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
-            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+            Real f0 = U[id0][m];
+            Real f1 = U[id1][m];
+            Real f2 = Ubc[m];
+            U[id3][m] = quadratic_polynomial(z0, z1, z2, f0, f1, f2, z3);
+            U[id4][m] = quadratic_polynomial(z0, z1, z2, f0, f1, f2, z4);
         }
+        // Int ki  = gc;
+        // Int kii = gc + 1;
+        // Int ko  = gc - 1;
+        // Int koo = gc - 2;
+        // Int idi  = index(i, j, ki , size);
+        // Int idii = index(i, j, kii, size);
+        // Int ido  = index(i, j, ko , size);
+        // Int idoo = index(i, j, koo, size);
+        // Real hi  = 0.5*dz[ki ];
+        // Real hii = 0.5*dz[kii] + dz[ki];
+        // Real ho  = 0.5*dz[ko ];
+        // Real hoo = 0.5*dz[koo] + dz[ko];
+        // Real Ubc[] = {0, 0, 0};
+        // for (Int m = 0; m < 3; m ++) {
+        //     U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
+        //     U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+        // }
     }}
 
     /** z+ slip */
 #pragma acc kernels loop independent collapse(2) \
 present(U[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
-        Int ki  = size[2] - gc - 1;
-        Int kii = size[2] - gc - 2;
-        Int ko  = size[2] - gc;
-        Int koo = size[2] - gc + 1;
-        Int idi  = index(i, j, ki , size);
-        Int idii = index(i, j, kii, size);
-        Int ido  = index(i, j, ko , size);
-        Int idoo = index(i, j, koo, size);
-        Real hi  = 0.5*dz[ki ];
-        Real hii = 0.5*dz[kii] + dz[ki];
-        Real ho  = 0.5*dz[ko ];
-        Real hoo = 0.5*dz[koo] + dz[ko];
-        Real Ubc[] = {U[idi][0], U[idi][1], 0};
+        Int k0 = size[2] - gc - 2;
+        Int k1 = size[2] - gc - 1;
+        Int k3 = size[2] - gc;
+        Int k4 = size[2] - gc + 1;
+        Int id0 = index(i, j, k0, size);
+        Int id1 = index(i, j, k1, size);
+        Int id3 = index(i, j, k3, size);
+        Int id4 = index(i, j, k4, size);
+        Real z0 = z[k0];
+        Real z1 = z[k1];
+        Real z2 = z[k1] + 0.5*dz[k1];
+        Real z3 = z[k3];
+        Real z4 = z[k4];
+        Real Ubc[] = {U[id1][0], U[id1][1], 0};
         for (Int m = 0; m < 3; m ++) {
-            U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
-            U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+            Real f0 = U[id0][m];
+            Real f1 = U[id1][m];
+            Real f2 = Ubc[m];
+            U[id3][m] = quadratic_polynomial(z0, z1, z2, f0, f1, f2, z3);
+            U[id4][m] = quadratic_polynomial(z0, z1, z2, f0, f1, f2, z4);
         }
+        // Int ki  = size[2] - gc - 1;
+        // Int kii = size[2] - gc - 2;
+        // Int ko  = size[2] - gc;
+        // Int koo = size[2] - gc + 1;
+        // Int idi  = index(i, j, ki , size);
+        // Int idii = index(i, j, kii, size);
+        // Int ido  = index(i, j, ko , size);
+        // Int idoo = index(i, j, koo, size);
+        // Real hi  = 0.5*dz[ki ];
+        // Real hii = 0.5*dz[kii] + dz[ki];
+        // Real ho  = 0.5*dz[ko ];
+        // Real hoo = 0.5*dz[koo] + dz[ko];
+        // Real Ubc[] = {U[idi][0], U[idi][1], 0};
+        // for (Int m = 0; m < 3; m ++) {
+        //     U[ido ][m] = Ubc[m] - (U[idi ][m] - Ubc[m])*(ho /hi );
+        //     U[idoo][m] = Ubc[m] - (U[idii][m] - Ubc[m])*(hoo/hii);
+        // }
     }}
 }
 

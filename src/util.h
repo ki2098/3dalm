@@ -8,7 +8,7 @@
 #include "type.h"
 
 #pragma acc routine seq
-Int index(Int i, Int j, Int k, Int size[3]) {
+static Int index(Int i, Int j, Int k, Int size[3]) {
     return i*size[1]*size[2] + j*size[2] + k;
 }
 
@@ -121,7 +121,8 @@ Int find_floor_index(T *arr, T value, Int len) {
     return - 1;
 }
 
-Int euclid_mod(Int x, Int y) {
+#pragma acc routine seq
+static Int euclid_mod(Int x, Int y) {
     Int r = x%y;
     if (r < 0) {
         r += abs(y);
@@ -129,7 +130,8 @@ Int euclid_mod(Int x, Int y) {
     return r;
 }
 
-Real euclid_fmod(Real x, Real y) {
+#pragma acc routine seq
+static Real euclid_fmod(Real x, Real y) {
     Real r = fmod(x, y);
     if (r < 0) {
         r += fabs(y);
@@ -137,7 +139,8 @@ Real euclid_fmod(Real x, Real y) {
     return r;
 }
 
-Real linear_interpolate(
+#pragma acc routine seq
+static Real linear_interpolate(
     Real v0, Real v1,
     Real x0, Real x1,
     Real xp
@@ -146,7 +149,8 @@ Real linear_interpolate(
     return v0*(1 - fx) + v1*fx;
 }
 
-Real trilinear_interpolate(
+#pragma acc routine seq
+static Real trilinear_interpolate(
     Real v0, Real v1, Real v2, Real v3, Real v4, Real v5, Real v6, Real v7,
     Real x0, Real x1,
     Real y0, Real y1,
@@ -168,4 +172,17 @@ Real trilinear_interpolate(
     Real vp = v0123*(1 - fz) + v4567*fz;
 
     return vp;
+}
+
+#pragma acc routine seq
+static Real quadratic_polynomial(
+    Real x0, Real x1, Real x2,
+    Real f0, Real f1, Real f2,
+    Real x3
+) {
+    Real l0 = ((x3 - x1) * (x3 - x2)) / ((x0 - x1) * (x0 - x2));
+    Real l1 = ((x3 - x0) * (x3 - x2)) / ((x1 - x0) * (x1 - x2));
+    Real l2 = ((x3 - x0) * (x3 - x1)) / ((x2 - x0) * (x2 - x1));
+
+    return f0*l0 + f1*l1 + f2*l2;
 }

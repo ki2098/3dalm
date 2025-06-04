@@ -11,9 +11,9 @@
     },
 
     "turbulence grid":{
-        "bar":0.09,
-        "mesh":0.402,
-        "thick":0.06,
+        "bar":0.1,
+        "mesh":1,
+        "thick":0.1,
         "x":0
     },
 
@@ -42,7 +42,11 @@
     "eq":{
         "tolerance":1e-3,
         "max iteration":1000,
-        "method":"SOR",
-        "relaxation rate":1.2
+        "method":"BiCG",
+        "preconditioner":{
+            "method":"SOR",
+            "max iteration":5,
+            "relaxation rate":1.1
+        }
     }
 }
