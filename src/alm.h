@@ -2,9 +2,18 @@
 
 #include <vector>
 #include <cmath>
+#include "json.hpp"
 #include "mpi_type.h"
 #include "util.h"
 #include "euler_angle.h"
+
+struct AirFoil {
+    Real r;
+    Real chord;
+    Real twist;
+    std::vector<Real> cl_table;
+    std::vector<Real> cd_table;
+};
 
 struct ActuatorPoint {
     Real U[3];
@@ -31,27 +40,136 @@ struct WindTurbine {
     Real thrust;
 };
 
-static void lookup_cdcl_table(
-    Real *cd_table, Real *cl_table, Real *attack_table, Int attack_count,
-    Real attack, Real &cd, Real &cl
+static nlohmann::json build_ap_props(
+    const nlohmann::json &wt_json,
+    Int wt_count, Int ap_per_blade
 ) {
-    Int i = find_floor_index(attack_table, attack, attack_count);
+    auto &blade_json = wt_json["blade"];
+    auto &af_json = blade_json["airfoil"];
+    auto &atk_json = blade_json["attack angle"];
+
+    Int af_count = af_json.size();
+    Int atk_count = atk_json.size();
+
+    std::vector<Real> afr;
+    std::vector<Real> aftwist;
+    std::vector<Real> afchord;
+    std::vector<std::vector<Real>> afcd;
+    std::vector<std::vector<Real>> afcl;
+    for (auto &af : af_json) {
+        afr.push_back(af["r/R"]);
+        aftwist.push_back(af["twist[deg]"]);
+        afchord.push_back(af["chord/R"]);
+        afcd.push_back(af["Cd"].get<std::vector<Real>>());
+        afcl.push_back(af["Cl"].get<std::vector<Real>>());
+    }
+
+    Int blade_per_wt = wt_json["number of blades"];
+    Int ap_per_wt = blade_per_wt*ap_per_blade;
+    Int ap_count = wt_count * ap_per_wt;
+    Real wt_r = wt_json["R"];
+    Real hub_r = wt_json["hub R"];
+    Real dr = (wt_r - hub_r)/ap_per_blade;
+    auto aps = nlohmann::json::array();
+    for (Int i = 0; i < ap_count; i ++) {
+        Real r = hub_r + (i % ap_per_blade + 0.5)*dr;
+        nlohmann::json ap;
+        ap["r"] = r;
+        ap["dr"] = dr;
+
+        Int af = find_floor_index(afr.data(), r, af_count);
+        if (af < 0) {
+            ap["chord"] = afchord[0];
+            ap["twist"] = aftwist[0];
+            ap["cd"] = afcd[0];
+            ap["cl"] = afcl[0];
+        } else if (af >= af_count - 1) {
+            ap["chord"] = afchord[af_count - 1];
+            ap["twist"] = aftwist[af_count - 1];
+            ap["cd"] = afcd[af_count - 1];
+            ap["cl"] = afcl[af_count - 1];
+        } else {
+            Real a1 = (r - afr[af])/(afr[af + 1] - afr[af]);
+            Real a0 = 1 - a1;
+            ap["chord"] = a0*afchord[af] + a1*afchord[af + 1];
+            ap["twist"] = a0*aftwist[af] + a1*aftwist[af + 1];
+            std::vector<Real> cd(atk_count), cl(atk_count);
+            for (Int j = 0; j < atk_count; j ++) {
+                cd[j] = a0*afcd[af][j] + a1*afcd[af + 1][j];
+                cl[j] = a0*afcl[af][j] + a1*afcl[af + 1][j];
+            }
+            ap["cd"] = cd;
+            ap["cl"] = cl;
+        }
+        aps.push_back(ap);
+    }
+
+    nlohmann::json tmp;
+    tmp["ap"] = aps;
+    tmp["attack"] = atk_json;
+    return tmp;
+}
+
+static void build_ap_props(
+    const nlohmann::json &ap_prop,
+    ActuatorPoint *&ap_lst, Real *&atk_lst, Real **&cd_tbl, Real **&cl_tbl,
+    Int &ap_count, Int &atk_count
+) {
+    auto &ap_json_lst = ap_prop["ap"];
+    auto &atk_json_lst = ap_prop["attack"];
+    ap_count = ap_json_lst.size();
+    atk_count = atk_json_lst.size();
+
+    atk_lst = new Real[atk_count];
+    for (Int j = 0; j < atk_count; j ++) {
+        atk_lst[j] = atk_json_lst[j];
+    }
+
+    ap_lst = new ActuatorPoint[ap_count];
+    cd_tbl = new Real*[ap_count];
+    cl_tbl = new Real*[ap_count];
+
+    for (Int i = 0; i < ap_count; i ++) {
+        auto &ap_json = ap_json_lst[i];
+        auto &ap = ap_lst[i];
+        ap.chord = ap_json["chord"];
+        ap.twist = ap_json["twist"];
+        ap.r = ap_json["r"];
+        ap.dr = ap_json["dr"];
+        cd_tbl[i] = new Real[atk_count];
+        auto &cd_json = ap_json["cd"];
+        for (Int j = 0; j < atk_count; j ++) {
+            cd_tbl[i][j] = cd_json[j];
+        }
+        cl_tbl[i] = new Real[atk_count];
+        auto &cl_json = ap_json["cl"];
+        for (Int j = 0; j < atk_count; j ++) {
+            cl_tbl[i][j] = cl_json[j];
+        }
+    }
+}
+
+static void lookup_cdcl_table(
+    Real *cd_table, Real *cl_table, Real *atk_table, Int atk_count,
+    Real atk, Real &cd, Real &cl
+) {
+    Int i = find_floor_index(atk_table, atk, atk_count);
     if (i < 0) {
         cd = cd_table[0];
         cl = cl_table[0];
-    } else if (i >= attack_count - 1) {
-        cd = cd_table[attack_count - 1];
-        cl = cl_table[attack_count - 1];
+    } else if (i >= atk_count - 1) {
+        cd = cd_table[atk_count - 1];
+        cl = cl_table[atk_count - 1];
     } else {
         cd = linear_interpolate(
             cd_table[i], cd_table[i + 1],
-            attack_table[i], attack_table[i + 1],
-            attack
+            atk_table[i], atk_table[i + 1],
+            atk
         );
         cl = linear_interpolate(
             cl_table[i], cl_table[i + 1],
-            attack_table[i], attack_table[i + 1],
-            attack
+            atk_table[i], atk_table[i + 1],
+            atk
         );
     }
 }
@@ -92,7 +210,7 @@ static void calc_ap_force(
     Real x[], Real y[], Real z[],
     WindTurbine *wt_list, Int wt_count,
     ActuatorPoint *ap_list, Int ap_count, Int blade_per_wt, Int ap_per_blade,
-    Real *cd_table[], Real *cl_table[], Real *attack_table, Int attack_count,
+    Real *cd_table[], Real *cl_table[], Real *atk_table, Int atk_count,
     Real t, Int size[3], Int gc,
     MpiInfo *mpi
 ) {
@@ -176,11 +294,11 @@ static void calc_ap_force(
             Real ut_ = ap.r*wt.rot_speed + Uap_[1]*sin(ap.theta) - Uap_[2]*cos(ap.theta);
             Real Urel2 = ux_*ux_ + ut_*ut_;
             Real phi = atan(ux_/ut_);
-            Real attack = phi - ap.twist;
+            Real atk = phi - ap.twist;
             Real cd, cl;
             lookup_cdcl_table(
-                cd_table[apid], cl_table[apid], attack_table, attack_count,
-                attack, cd, cl
+                cd_table[apid], cl_table[apid], atk_table, atk_count,
+                atk, cd, cl
             );
             Real fd = 0.5*cd*Urel2*ap.chord*ap.dr;
             Real fl = 0.5*cl*Urel2*ap.chord*ap.dr;
@@ -247,11 +365,12 @@ static void distribute_ap_force(
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int id = index(i, j, k, size);
         Real fx = 0, fy = 0, fz = 0;
+        Real xc = x[i], yc = y[j], zc = z[k];
+        Real e = 1/cubic(projection_width*sqrt(Pi));
         for (Int apid = 0; apid < ap_count; apid ++) {
             auto &ap = ap_list[apid];
-            Real xc = x[i], yc = y[j], zc = z[k];
             Real r2 = square(xc - ap.xyz[0]) + square(yc - ap.xyz[1]) + square(zc - ap.xyz[2]);
-            Real wght = (1/cubic(projection_width*sqrt(Pi)))*exp(- r2/square(projection_width));
+            Real wght = e*exp(- r2/square(projection_width));
 
             fx += wght*ap.f[0];
             fy += wght*ap.f[1];

@@ -12,16 +12,12 @@ static std::string euler_angle_to_str(EulerAngle type) {
     switch (type) {
     case EulerAngle::Roll:
         return "roll"; 
-        break;
     case EulerAngle::Pitch:
         return "pitch"; 
-        break;
     case EulerAngle::Yaw:
         return "yaw"; 
-        break;
     default:
         return "undefined"; 
-        break;
     }
 }
 
