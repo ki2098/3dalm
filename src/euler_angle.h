@@ -4,8 +4,6 @@
 #include <string>
 #include "type.h"
 
-static const Real Pi = M_PI;
-
 enum class EulerAngle {Roll, Pitch, Yaw, Undefined};
 
 static std::string euler_angle_to_str(EulerAngle type) {

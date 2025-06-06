@@ -186,3 +186,7 @@ static Real quadratic_polynomial(
 
     return f0*l0 + f1*l1 + f2*l2;
 }
+
+static Real degree_to_rad(Real a) {
+    return a*Pi/180;
+}

@@ -149,6 +149,70 @@ static void build_ap_props(
     }
 }
 
+static void build_wt_props(
+    const nlohmann::json &wt_prop_json,
+    const nlohmann::json &wt_lst_json,
+    WindTurbine *&wt_lst, Int &wt_count
+) {
+    wt_count = wt_lst_json.size();
+    wt_lst = new WindTurbine[wt_count];
+    Real tower = wt_prop_json["tower"];
+    Real overhang = wt_prop_json["overhang"];
+    for (Int i = 0; i < wt_count; i ++) {
+        auto &wt_json = wt_lst_json[i];
+        auto &wt = wt_lst[i];
+        auto &base = wt_json["base"];
+        wt.base[0] = base[0];
+        wt.base[1] = base[1];
+        wt.base[2] = base[2];
+
+        wt.rot_speed = wt_json["rotation speed"];
+
+        wt.rot_center[0] = - overhang;
+        wt.rot_center[1] = 0;
+        wt.rot_center[2] = tower;
+
+        auto &angle = wt_json["angle"];
+        for (Int j = 0; j < 3; j ++) {
+            auto &a = angle[j];
+            if (
+                a.is_number() && a.get<Real>() != 0
+            ||  a.is_object()
+            ) {
+                switch (j)
+                {
+                case 0:
+                    wt.angle_type = EulerAngle::Roll;
+                    break;
+                case 1:
+                    wt.angle_type = EulerAngle::Pitch;
+                    break;
+                case 2:
+                    wt.angle_type = EulerAngle::Yaw;
+                    break;
+                default:
+                    wt.angle_type = EulerAngle::Undefined;
+                    break;
+                }
+
+                if (a.is_number()) {
+                    wt.formula[0] = 0;
+                    wt.formula[1] = 0;
+                    wt.formula[2] = 0;
+                    wt.formula[3] = degree_to_rad(a);
+                } else if (a.is_object()) {
+                    wt.formula[0] = degree_to_rad(a["amp"]);
+                    wt.formula[1] = 2*Pi/a["T"].get<Real>();
+                    wt.formula[2] = degree_to_rad(a["phase"]);
+                    wt.formula[3] = degree_to_rad(a["offset"]);
+                }
+
+                break;
+            }
+        }
+    }
+}
+
 static void lookup_cdcl_table(
     Real *cd_table, Real *cl_table, Real *atk_table, Int atk_count,
     Real atk, Real &cd, Real &cl

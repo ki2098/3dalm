@@ -48,5 +48,30 @@
             "max iteration":5,
             "relaxation rate":1.1
         }
+    },
+
+    "windfarm":{
+        "windturbine properties":"wt.json",
+        "windturbine array":[
+            {
+                "base":[0, 0, 0],
+                "angle":[
+                    0,
+                    {
+                        "amp":3,
+                        "T":18,
+                        "phase":0,
+                        "offset":0
+                    },
+                    0
+                ],
+                "rotation speed":8
+            }
+        ]
+    },
+
+    "scaling":{
+        "U":10,
+        "L":0.5
     }
 }
