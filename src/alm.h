@@ -7,14 +7,6 @@
 #include "util.h"
 #include "euler_angle.h"
 
-struct AirFoil {
-    Real r;
-    Real chord;
-    Real twist;
-    std::vector<Real> cl_table;
-    std::vector<Real> cd_table;
-};
-
 struct ActuatorPoint {
     Real U[3];
     Real xyz[3];
@@ -41,10 +33,10 @@ struct WindTurbine {
 };
 
 static nlohmann::json build_ap_props(
-    const nlohmann::json &wt_json,
+    const nlohmann::json &wt_prop_json,
     Int wt_count, Int ap_per_blade
 ) {
-    auto &blade_json = wt_json["blade"];
+    auto &blade_json = wt_prop_json["blade"];
     auto &af_json = blade_json["airfoil"];
     auto &atk_json = blade_json["attack angle"];
 
@@ -64,11 +56,11 @@ static nlohmann::json build_ap_props(
         afcl.push_back(af["Cl"].get<std::vector<Real>>());
     }
 
-    Int blade_per_wt = wt_json["number of blades"];
+    Int blade_per_wt = wt_prop_json["number of blades"];
     Int ap_per_wt = blade_per_wt*ap_per_blade;
     Int ap_count = wt_count * ap_per_wt;
-    Real wt_r = wt_json["R"];
-    Real hub_r = wt_json["hub R"];
+    Real wt_r = wt_prop_json["R"];
+    Real hub_r = wt_prop_json["hub R"];
     Real dr = (wt_r - hub_r)/ap_per_blade;
     auto aps = nlohmann::json::array();
     for (Int i = 0; i < ap_count; i ++) {
@@ -151,15 +143,15 @@ static void build_ap_props(
 
 static void build_wt_props(
     const nlohmann::json &wt_prop_json,
-    const nlohmann::json &wt_lst_json,
+    const nlohmann::json &wt_array_json,
     WindTurbine *&wt_lst, Int &wt_count
 ) {
-    wt_count = wt_lst_json.size();
+    wt_count = wt_array_json.size();
     wt_lst = new WindTurbine[wt_count];
     Real tower = wt_prop_json["tower"];
     Real overhang = wt_prop_json["overhang"];
     for (Int i = 0; i < wt_count; i ++) {
-        auto &wt_json = wt_lst_json[i];
+        auto &wt_json = wt_array_json[i];
         auto &wt = wt_lst[i];
         auto &base = wt_json["base"];
         wt.base[0] = base[0];
@@ -214,33 +206,35 @@ static void build_wt_props(
 }
 
 static void lookup_cdcl_table(
-    Real *cd_table, Real *cl_table, Real *atk_table, Int atk_count,
+    Real *cd_tbl, Real *cl_tbl, Real *atk_lst, Int atk_count,
     Real atk, Real &cd, Real &cl
 ) {
-    Int i = find_floor_index(atk_table, atk, atk_count);
+    Int i = find_floor_index(atk_lst, atk, atk_count);
     if (i < 0) {
-        cd = cd_table[0];
-        cl = cl_table[0];
+        cd = cd_tbl[0];
+        cl = cl_tbl[0];
     } else if (i >= atk_count - 1) {
-        cd = cd_table[atk_count - 1];
-        cl = cl_table[atk_count - 1];
+        cd = cd_tbl[atk_count - 1];
+        cl = cl_tbl[atk_count - 1];
     } else {
         cd = linear_interpolate(
-            cd_table[i], cd_table[i + 1],
-            atk_table[i], atk_table[i + 1],
+            cd_tbl[i], cd_tbl[i + 1],
+            atk_lst[i], atk_lst[i + 1],
             atk
         );
         cl = linear_interpolate(
-            cl_table[i], cl_table[i + 1],
-            atk_table[i], atk_table[i + 1],
+            cl_tbl[i], cl_tbl[i + 1],
+            atk_lst[i], atk_lst[i + 1],
             atk
         );
     }
 }
 
-static void update_ap_position(WindTurbine *wt_list, Int wt_count, ActuatorPoint *ap_list, Int ap_count, Int blade_per_wt, Int ap_per_blade, Real t) {
+static void update_ap_position(WindTurbine *wt_lst, Int wt_count, ActuatorPoint *ap_lst, Int ap_count, Int blade_per_wt, Int ap_per_blade, Real t) {
+#pragma acc kernels loop independent \
+present(wt_lst[:wt_count])
     for (Int wtid = 0; wtid < wt_count; wtid ++) {
-        auto &wt = wt_list[wtid];
+        auto &wt = wt_lst[wtid];
         Real A = wt.formula[0];
         Real B = wt.formula[1];
         Real C = wt.formula[2];
@@ -250,11 +244,13 @@ static void update_ap_position(WindTurbine *wt_list, Int wt_count, ActuatorPoint
     }
 
     Int ap_per_wt = ap_per_blade*blade_per_wt;
+#pragma acc kernels loop independent \
+present(wt_lst[:wt_count], ap_lst[:ap_count])
     for (Int apid = 0; apid < ap_count; apid ++) {
         Int wtid = apid/ap_per_wt;
         Int bid = (apid%ap_per_wt)/ap_per_blade;
-        auto &ap = ap_list[apid];
-        auto &wt = wt_list[wtid];
+        auto &ap = ap_lst[apid];
+        auto &wt = wt_lst[wtid];
         Real start_theta = bid*(2*Pi/blade_per_wt);
         ap.theta = start_theta + t*wt.rot_speed;
         Real xyz[] = {
@@ -272,18 +268,25 @@ static void update_ap_position(WindTurbine *wt_list, Int wt_count, ActuatorPoint
 static void calc_ap_force(
     Real U[][3],
     Real x[], Real y[], Real z[],
-    WindTurbine *wt_list, Int wt_count,
-    ActuatorPoint *ap_list, Int ap_count, Int blade_per_wt, Int ap_per_blade,
-    Real *cd_table[], Real *cl_table[], Real *atk_table, Int atk_count,
+    WindTurbine *wt_lst, Int wt_count,
+    ActuatorPoint *ap_lst, Int ap_count, Int blade_per_wt, Int ap_per_blade,
+    Real *cd_tbl[], Real *cl_tbl[], Real *atk_lst, Int atk_count,
     Real t, Int size[3], Int gc,
     MpiInfo *mpi
 ) {
+    Int len = size[0]*size[1]*size[2];
     Int ap_per_wt = ap_per_blade*blade_per_wt;
     std::vector<MPI_Request> apreq(ap_count);
+#pragma acc kernels loop independent \
+present(wt_lst[:wt_count], ap_lst[:ap_count]) \
+present(atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count]) \
+present(U[:len]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
     for (Int apid = 0; apid < ap_count; apid ++) {
         Int wtid = apid/ap_per_wt;
-        auto &ap = ap_list[apid];
-        auto &wt = wt_list[wtid];
+        auto &ap = ap_lst[apid];
+        auto &wt = wt_lst[wtid];
         Int i = find_floor_index(x, ap.xyz[0], size[0]);
         Int j = find_floor_index(y, ap.xyz[1], size[1]);
         Int k = find_floor_index(z, ap.xyz[2], size[2]);
@@ -307,51 +310,30 @@ static void calc_ap_force(
             Real z0 = z[k], z1 = z[k + 1];
             Real xp = ap.xyz[0], yp = ap.xyz[1], zp = ap.xyz[2];
 
-            Real u0 = U[id0][0];
-            Real u1 = U[id1][0];
-            Real u2 = U[id2][0];
-            Real u3 = U[id3][0];
-            Real u4 = U[id4][0];
-            Real u5 = U[id5][0];
-            Real u6 = U[id6][0];
-            Real u7 = U[id7][0];
-            Real uap = trilinear_interpolate(
-                u0, u1, u2, u3, u4, u5, u6, u7,
-                x0, x1, y0, y1, z0, z1, xp, yp, zp
-            );
-
-            Real v0 = U[id0][1];
-            Real v1 = U[id1][1];
-            Real v2 = U[id2][1];
-            Real v3 = U[id3][1];
-            Real v4 = U[id4][1];
-            Real v5 = U[id5][1];
-            Real v6 = U[id6][1];
-            Real v7 = U[id7][1];
-            Real vap = trilinear_interpolate(
-                v0, v1, v2, v3, v4, v5, v6, v7,
-                x0, x1, y0, y1, z0, z1, xp, yp, zp
-            );
-
-            Real w0 = U[id0][2];
-            Real w1 = U[id1][2];
-            Real w2 = U[id2][2];
-            Real w3 = U[id3][2];
-            Real w4 = U[id4][2];
-            Real w5 = U[id5][2];
-            Real w6 = U[id6][2];
-            Real w7 = U[id7][2];
-            Real wap = trilinear_interpolate(
-                w0, w1, w2, w3, w4, w5, w6, w7,
-                x0, x1, y0, y1, z0, z1, xp, yp, zp
-            );
+            Real Uap[3];
+            
+#pragma acc loop independent
+            for (Int m = 0; m < 3; m ++) {
+                Real u0 = U[id0][m];
+                Real u1 = U[id1][m];
+                Real u2 = U[id2][m];
+                Real u3 = U[id3][m];
+                Real u4 = U[id4][m];
+                Real u5 = U[id5][m];
+                Real u6 = U[id6][m];
+                Real u7 = U[id7][m];
+                Uap[m] = trilinear_interpolate(
+                    u0, u1, u2, u3, u4, u5, u6, u7,
+                    x0, x1, y0, y1, z0, z1, xp, yp, zp
+                );
+            }
 
             Real apxyz_[] = {
                 ap.xyz[0] - wt.base[0],
                 ap.xyz[1] - wt.base[1],
                 ap.xyz[2] - wt.base[2]
             };
-            Real Uap[] = {uap, vap, wap}, Uap_[3];
+            Real Uap_[3];
             frame_transform_dt(apxyz_, Uap, Uap_, wt.angle, wt.angle_dt, wt.angle_type);
 
             Real ux_ = Uap_[0];
@@ -361,7 +343,7 @@ static void calc_ap_force(
             Real atk = phi - ap.twist;
             Real cd, cl;
             lookup_cdcl_table(
-                cd_table[apid], cl_table[apid], atk_table, atk_count,
+                cd_tbl[apid], cl_tbl[apid], atk_lst, atk_count,
                 atk, cd, cl
             );
             Real fd = 0.5*cd*Urel2*ap.chord*ap.dr;
@@ -388,17 +370,21 @@ static void calc_ap_force(
     
     if (mpi->size > 1) {
         for (Int apid = 0; apid < ap_count; apid ++) {
-            MPI_Iallreduce(MPI_IN_PLACE, ap_list[apid].f, 3, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &apreq[apid]);
+#pragma acc host_data use_device(ap_lst)
+            MPI_Iallreduce(MPI_IN_PLACE, ap_lst[apid].f, 3, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &apreq[apid]);
         }
     }
 
     std::vector<MPI_Request> torque_req(wt_count), thrust_req(wt_count);
+#pragma acc kernels loop independent \
+present(wt_lst[:wt_count], ap_lst[:ap_count])
     for (Int wtid = 0; wtid < wt_count; wtid ++) {
-        auto &wt = wt_list[wtid];
+        auto &wt = wt_lst[wtid];
         Real torque = 0, thrust = 0;
+#pragma acc loop seq
         for (Int apid = wtid*ap_per_wt; apid < (wtid + 1)*ap_per_wt; apid ++) {
-            torque += ap_list[apid].torque;
-            thrust += ap_list[apid].thrust;
+            torque += ap_lst[apid].torque;
+            thrust += ap_lst[apid].thrust;
         }
         wt.torque = torque;
         wt.thrust = thrust;
@@ -406,8 +392,10 @@ static void calc_ap_force(
 
     if (mpi->size > 1) {
         for (Int wtid = 0; wtid < wt_count; wtid ++) {
-            MPI_Iallreduce(MPI_IN_PLACE, &wt_list[wtid].torque, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &torque_req[wtid]);
-            MPI_Iallreduce(MPI_IN_PLACE, &wt_list[wtid].thrust, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &thrust_req[wtid]);
+#pragma acc host_data use_device(wt_lst)
+            MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].torque, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &torque_req[wtid]);
+#pragma acc host_data use_device(wt_lst)
+            MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].thrust, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &thrust_req[wtid]);
         }
     }
 
@@ -420,10 +408,15 @@ static void calc_ap_force(
 
 static void distribute_ap_force(
     Real f[][3],
-    ActuatorPoint *ap_list, Int ap_count, Real projection_width,
+    ActuatorPoint *ap_lst, Int ap_count, Real projection_width,
     Real x[], Real y[], Real z[],
     Int size[3], Int gc
 ) {
+    Int len = size[0]*size[1]*size[2];
+#pragma acc kernels loop independent collapse(3) \
+present(f[:len], ap_lst[:ap_count]) \
+present(x[:size[0]], y[:size[1]], z[:size[2]]) \
+copyin(size[:3])
     for (Int i = gc; i < size[0] - gc; i ++) {
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
@@ -431,8 +424,9 @@ static void distribute_ap_force(
         Real fx = 0, fy = 0, fz = 0;
         Real xc = x[i], yc = y[j], zc = z[k];
         Real e = 1/cubic(projection_width*sqrt(Pi));
+#pragma acc loop seq
         for (Int apid = 0; apid < ap_count; apid ++) {
-            auto &ap = ap_list[apid];
+            auto &ap = ap_lst[apid];
             Real r2 = square(xc - ap.xyz[0]) + square(yc - ap.xyz[1]) + square(zc - ap.xyz[2]);
             Real wght = e*exp(- r2/square(projection_width));
 
@@ -444,4 +438,35 @@ static void distribute_ap_force(
         f[id][1] = fy;
         f[id][2] = fz;
     }}}
+}
+
+static void run_alm(
+    Real U[][3], Real f[][3], Real projection_width,
+    Real x[], Real y[], Real z[],
+    WindTurbine *wt_lst, Int wt_count,
+    ActuatorPoint *ap_lst, Int ap_count, Int blade_per_wt, Int ap_per_blade,
+    Real *cd_tbl[], Real *cl_tbl[], Real *atk_lst, Int atk_count,
+    Real t, Int size[3], Int gc,
+    MpiInfo *mpi
+) {
+    if (ap_count <= 0) {
+        return;
+    }
+    update_ap_position(
+        wt_lst, wt_count,
+        ap_lst, ap_count, blade_per_wt, ap_per_blade, t
+    );
+    calc_ap_force(
+        U, x, y, z,
+        wt_lst, wt_count,
+        ap_lst, ap_count, blade_per_wt, ap_per_blade,
+        cd_tbl, cl_tbl, atk_lst, atk_count,
+        t, size, gc, mpi
+    );
+    distribute_ap_force(
+        f,
+        ap_lst, ap_count, projection_width,
+        x, y, z,
+        size, gc
+    );
 }

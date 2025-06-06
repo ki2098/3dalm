@@ -2,6 +2,7 @@
 
 import sys
 import os
+import json
 
 src_dir = sys.argv[1]
 dst_path = sys.argv[2]
@@ -37,10 +38,10 @@ cy, y = build_coordinate(f'{src_dir}/y.txt')
 cz, z = build_coordinate(f'{src_dir}/z.txt')
 
 with open(dst_path, "w") as f:
-    f.write(f'{cx} {cy} {cz} {gc}\n')
-    for i in range(cx):
-        f.write(f'{x[i]:.6}\n')
-    for j in range(cy):
-        f.write(f'{y[j]:.6}\n')
-    for k in range(cz):
-        f.write(f'{z[k]:.6}\n')
+    mesh_info = {
+        "guide cell":gc,
+        "x":x,
+        "y":y,
+        "z":z
+    }
+    f.write(json.dumps(json.loads(json.dumps(mesh_info), parse_float=lambda x: round(float(x), 8)), indent=4))

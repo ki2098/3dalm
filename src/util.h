@@ -74,7 +74,7 @@ Int sign(T x) {
 }
 
 template<typename T>
-std::string to_string_fixed_length(T value, Int len, char fill_char = '0') {
+std::string to_str_fixed_length(T value, Int len, char fill_char = '0') {
     std::stringstream ss;
     ss << std::setw(len) << std::setfill(fill_char) << value;
     return ss.str();
@@ -105,6 +105,7 @@ Int find_nearest_index(T *arr, T value, Int len) {
     return - 1;
 }
 
+#pragma acc routine seq
 template<typename T>
 Int find_floor_index(T *arr, T value, Int len) {
     if (value < arr[0]) {

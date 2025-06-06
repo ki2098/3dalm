@@ -327,7 +327,7 @@ void calc_ax_plus_by(
 #pragma acc kernels loop independent \
 present(x[:len], y[:len], z[:len])
     for (Int i = 0; i < len; i ++) {
-#pragma acc loop seq
+// #pragma acc loop seq
         for (Int m = 0; m < N; m ++) {
             z[i][m] = a*x[i][m] + b*y[i][m];
         }

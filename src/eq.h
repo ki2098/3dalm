@@ -576,7 +576,7 @@ copyin(size[:3])
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int id = index(i, j, k, size);
-#pragma acc loop seq
+// #pragma acc loop seq
         for (Int m = 0; m < 7; m ++) {
             A[id][m] /= max_diag;
         }
@@ -689,7 +689,7 @@ copyin(size[:3])
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int id = index(i, j, k, size);
-#pragma acc loop seq
+// #pragma acc loop seq
         for (Int m = 0; m < 7; m ++) {
             A[id][m] /= max_diag;
         }
@@ -788,7 +788,7 @@ copyin(size[:3])
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int id = index(i, j, k, size);
-#pragma acc loop seq
+// #pragma acc loop seq
         for (Int m = 0; m < 7; m ++) {
             A[id][m] /= max_diag;
         }

@@ -1,77 +1,94 @@
 {
-    "runtime":{
-        "dt":1e-3,
-        "time":150
+    "runtime": {
+        "dt": 1e-3,
+        "time": 15
     },
-
-    "output":{
-        "output start time":50,
-        "output interval time":50,
-        "time avg start time":50
+    "output": {
+        "output start time": 0,
+        "output interval time": 1,
+        "time avg start time": 0
     },
-
-    "turbulence grid":{
-        "bar":0.1,
-        "mesh":1,
-        "thick":0.1,
-        "x":0
+    "turbulence grid": {
+        "bar": 0.1,
+        "mesh": 1,
+        "thick": 0.1,
+        "x": -8
     },
-
-    "probe":[
-        [1 , 0, 1],
-        [2 , 0, 1],
-        [3 , 0, 1],
-        [4 , 0, 1],
-        [5 , 0, 1],
-        [6 , 0, 1],
-        [7 , 0, 1],
-        [8 , 0, 1],
-        [9 , 0, 1],
-        [10, 0, 1]
+    "probe": [
+        [
+            1,
+            0,
+            1
+        ],
+        [
+            2,
+            0,
+            1
+        ],
+        [
+            3,
+            0,
+            1
+        ],
+        [
+            4,
+            0,
+            1
+        ],
+        [
+            5,
+            0,
+            1
+        ],
+        [
+            6,
+            0,
+            1
+        ],
+        [
+            7,
+            0,
+            1
+        ],
+        [
+            8,
+            0,
+            1
+        ],
+        [
+            9,
+            0,
+            1
+        ],
+        [
+            10,
+            0,
+            1
+        ]
     ],
-
-    "inflow":{
-        "value":[1, 0, 0]
-    },
-
-    "cfd":{
-        "Re":338800,
-        "Cs":0.1
-    },
-    
-    "eq":{
-        "tolerance":1e-3,
-        "max iteration":1000,
-        "method":"BiCG",
-        "preconditioner":{
-            "method":"SOR",
-            "max iteration":5,
-            "relaxation rate":1.1
-        }
-    },
-
-    "windfarm":{
-        "windturbine properties":"wt.json",
-        "windturbine array":[
-            {
-                "base":[0, 0, 0],
-                "angle":[
-                    0,
-                    {
-                        "amp":3,
-                        "T":18,
-                        "phase":0,
-                        "offset":0
-                    },
-                    0
-                ],
-                "rotation speed":8
-            }
+    "inflow": {
+        "value": [
+            1,
+            0,
+            0
         ]
     },
-
-    "scaling":{
-        "U":10,
-        "L":0.5
+    "cfd": {
+        "Re": 338800,
+        "Cs": 0.1
+    },
+    "eq": {
+        "tolerance": 1e-3,
+        "max iteration": 1000,
+        "method": "BiCG",
+        "preconditioner": {
+            "method": "SOR",
+            "max iteration": 5,
+            "relaxation rate": 1.1
+        }
+    },
+    "scaling": {
+        "U": 10,
+        "L": 0.5
     }
 }

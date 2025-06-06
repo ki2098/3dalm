@@ -95,6 +95,74 @@ struct OutHandler : public Header {
     }
 };
 
+static void build_mesh_from_json(
+    const std::string &path,
+    Real *&x, Real *&y, Real *&z,
+    Real *&dx, Real *&dy, Real *&dz,
+    Int size[3], Int &gc,
+    MpiInfo *mpi
+) {
+    auto &&mesh_json = nlohmann::json::parse(std::ifstream(path));
+    gc = mesh_json["guide cell"];
+
+    auto &x_json = mesh_json["x"];
+    size[0] = x_json.size();
+    x  = new double[size[0]];
+    dx = new double[size[0]];
+    for (Int i = 0; i < size[0]; i ++) {
+        x[i] = x_json[i]/*  >> dx[i] */;
+    }
+    for (Int i = 1; i < size[0] - 1; i ++) {
+        dx[i] = 0.5*(x[i + 1] - x[i - 1]);
+    }
+    dx[0] = 
+        -   1.5*    x[0]
+        +   2.0*    x[1] 
+        -   0.5*    x[2];
+    dx[size[0] - 1] = 
+            1.5*    x[size[0] - 1]
+        -   2.0*    x[size[0] - 2]
+        +   0.5*    x[size[0] - 3];
+    
+    auto &y_json = mesh_json["y"];
+    size[1] = y_json.size();
+    y  = new double[size[1]];
+    dy = new double[size[1]];
+    for (Int j = 0; j < size[1]; j ++) {
+        y[j] = y_json[j]/*  >> dy[j] */;
+    }
+    for (Int j = 1; j < size[1] - 1; j ++) {
+        dy[j] = 0.5*(y[j + 1] - y[j - 1]);
+    }
+    dy[0] = 
+        -   1.5*    y[0]
+        +   2.0*    y[1] 
+        -   0.5*    y[2];
+    dy[size[1] - 1] = 
+            1.5*    y[size[1] - 1]
+        -   2.0*    y[size[1] - 2]
+        +   0.5*    y[size[1] - 3];
+    
+    auto &z_json = mesh_json["z"];
+    size[2] = z_json.size();
+    z  = new double[size[2]];
+    dz = new double[size[2]];
+    for (Int k = 0; k < size[2]; k ++) {
+        z[k] = z_json[k]/*  >> dz[k] */;
+    }
+    for (Int k = 1; k < size[2] - 1; k ++) {
+        dz[k] = 0.5*(z[k + 1] - z[k - 1]);
+    }
+    dz[0] = 
+        -   1.5*    z[0]
+        +   2.0*    z[1] 
+        -   0.5*    z[2];
+    dz[size[2] - 1] = 
+            1.5*    z[size[2] - 1]
+        -   2.0*    z[size[2] - 2]
+        +   0.5*    z[size[2] - 3];
+}
+
 static void build_mesh(
     const std::string &path,
     Real *&x, Real *&y, Real *&z,
@@ -254,9 +322,9 @@ static void write_binary(
 }
 
 static std::string make_rank_binary_filename(std::string prefix, int rank, Int step) {
-    return prefix + "_" + to_string_fixed_length(rank, 5) + "_" + to_string_fixed_length(step, 10);
+    return prefix + "_" + to_str_fixed_length(rank, 5) + "_" + to_str_fixed_length(step, 10);
 }
 
 static std::string make_binary_filename(std::string prefix, Int step) {
-    return prefix + "_" + to_string_fixed_length(step, 10);
+    return prefix + "_" + to_str_fixed_length(step, 10);
 }

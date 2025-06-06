@@ -10,6 +10,7 @@
 #include "bc.h"
 #include "cfd.h"
 #include "eq.h"
+#include "alm.h"
 
 using json = nlohmann::json;
 
@@ -157,6 +158,21 @@ copyin(size[:3])
     }}}
 }
 
+struct CharacScale {
+    Real U, L, p, t;
+
+    void set_scale(Real U, Real L) {
+        this->U = U;
+        this->L = L;
+        this->t = L/U;
+        this->p = U*U;
+    }
+
+    CharacScale() {
+        this->set_scale(1, 1);
+    }
+};
+
 struct Runtime {
     Int step = 0, max_step;
     Real dt;
@@ -182,7 +198,8 @@ struct Mesh {
     Real *x, *y, *z, *dx, *dy, *dz;
 
     void initialize_from_file(const std::string &path, Int size[3], Int &gc, MpiInfo *mpi) {
-        build_mesh(path, x, y, z, dx, dy, dz, size, gc, mpi);
+        // build_mesh(path, x, y, z, dx, dy, dz, size, gc, mpi);
+        build_mesh_from_json(path, x, y, z, dx, dy, dz, size, gc, mpi);
 
 #pragma acc enter data \
 copyin(x[:size[0]], y[:size[1]], z[:size[2]]) \
@@ -260,6 +277,7 @@ struct Cfd {
     Real (*U)[3], (*Uold)[3], (*Utavg)[3];
     Real (*JU)[3];
     Real *p, *nut, *q, *div, *solid;
+    Real (*f)[3];
     Real Uin[3];
     Real Re, Cs;
     Real avg_div, max_cfl;
@@ -281,9 +299,10 @@ struct Cfd {
         q = new Real[len]();
         div = new Real[len]();
         solid = new Real[len]();
+        f = new Real[len][3]();
 
 #pragma acc enter data \
-create(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len])
+create(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len], f[:len])
 
         // printf("CFD INFO\n");
         // printf("\tRe = %lf\n", this->Re);
@@ -301,10 +320,11 @@ create(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], 
         delete[] q;
         delete[] div;
         delete[] solid;
+        delete[] f;
 
         Int len = size[0]*size[1]*size[2];
 #pragma acc exit data \
-delete(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len])
+delete(U[:len], Uold[:len], Utavg[:len], JU[:len], p[:len], q[:len], nut[:len], div[:len], solid[:len], f[:len])
     }
 };
 
@@ -429,6 +449,61 @@ struct Probe {
     }
 };
 
+struct Alm {
+    ActuatorPoint *ap_lst;
+    WindTurbine *wt_lst;
+    Real **cd_tbl, **cl_tbl, *atk_lst;
+    Int ap_count = 0, wt_count = 0, atk_count = 0;
+    Int ap_per_blade, blade_per_wt;
+    Real projection_width;
+
+    void intialize(
+        const std::string &wt_prop_path,
+        const std::string &wt_setup_path
+    ) {
+        std::ifstream wt_setup_file(wt_setup_path);
+        if (!wt_setup_file) {
+            return;
+        }
+
+        std::ifstream wt_prop_file(wt_prop_path);
+        auto &&wt_prop_json = nlohmann::json::parse(wt_prop_file);
+        auto &&wt_setup_json = nlohmann::json::parse(wt_setup_file);
+        auto &wt_array_json = wt_setup_json["windturbine array"];
+        auto &alm_setup_json = wt_setup_json["alm"];
+        wt_count = wt_array_json.size();
+        ap_per_blade = alm_setup_json["blade points"];
+        projection_width = alm_setup_json["projection width"];
+        blade_per_wt = wt_prop_json["number of blades"];
+
+        build_ap_props(
+            build_ap_props(wt_prop_json, wt_count, ap_per_blade),
+            ap_lst, atk_lst, cd_tbl, cl_tbl, ap_count, atk_count
+        );
+
+        build_wt_props(wt_prop_json, wt_array_json, wt_lst, wt_count);
+
+#pragma acc enter data \
+copyin(ap_lst[:ap_count], wt_lst[:wt_count], atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count])
+    }
+
+    ~Alm() {
+        if (ap_count > 0) {
+            delete[] ap_lst;
+            delete[] atk_lst;
+            delete[] cd_tbl;
+            delete[] cl_tbl;
+#pragma acc exit data \
+delete(ap_lst[:ap_count], atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count])
+        }
+        if (wt_count > 0) {
+            delete[] wt_lst;
+#pragma acc exit data \
+delete(wt_lst[:wt_count])
+        }
+    }
+};
+
 struct Solver {
     Int gsize[3];
     Int size[3];
@@ -440,12 +515,15 @@ struct Solver {
     Mesh gmesh, mesh;
     Cfd cfd;
     Eq eq;
+    Alm alm;
 
     json setup_json;
     json snapshot_json = {};
     std::filesystem::path case_dir, output_dir;
 
     OutHandler out_handler, tavg_out_handler;
+
+    CharacScale scale;
 
     std::vector<Probe> probes;
 
@@ -517,8 +595,7 @@ struct Solver {
             tgg_x = tgg_json["x"];
         }
 
-        auto &mesh_json = setup_json["mesh"];
-        auto mesh_path = case_dir/"mesh.txt";
+        auto mesh_path = case_dir/"mesh.json";
         gmesh.initialize_from_file(mesh_path, gsize, gc, &mpi);
         assert(gc >= 2);
         mesh.initialize_from_global_mesh(&gmesh, gsize, size, offset, gc, &mpi);
@@ -600,7 +677,8 @@ struct Solver {
                 }
             }
         }
-        
+
+        alm.intialize("windturbine_properties.json", "windturbine_setup.json");
 
         /* if (eq.method == "BiCG") {
             eq.max_diag = build_A_for_BiCG(
@@ -711,6 +789,15 @@ struct Solver {
             &mpi
         );
 
+        run_alm(
+            cfd.U, cfd.f, alm.projection_width,
+            mesh.x, mesh.y, mesh.z,
+            alm.wt_lst, alm.wt_count,
+            alm.ap_lst, alm.ap_count, alm.blade_per_wt, alm.ap_per_blade,
+            alm.cd_tbl, alm.cl_tbl, alm.atk_lst, alm.atk_count,
+            rt.get_time(), size, gc, &mpi
+        );
+
         // printf("%d div OK\n", mpi.rank);
 
         Int effective_count = (gsize[0] - 2*gc)*(gsize[1] - 2*gc)*(gsize[2] - 2*gc);
@@ -744,6 +831,12 @@ struct Solver {
 
             printf("DEVICE INFO\n");
             printf("\tnumber of GPUs = %d\n", gpu_count);
+
+            printf("CHARACTERISTIC SCALE INFO\n");
+            printf("\tU = %lf\n", scale.U);
+            printf("\tL = %lf\n", scale.L);
+            printf("\tt = %lf\n", scale.t);
+            printf("\tp = %lf\n", scale.p);
 
             printf("MESH INFO\n");
             printf("\tpath = %s\n", mesh_path.c_str());
@@ -799,6 +892,54 @@ struct Solver {
                 if (eq.pc_method == "SOR") {
                     printf("\trelaxation rate = %lf\n", eq.pc_relax_rate);
                 }
+            }
+
+            if (alm.ap_count > 0) {
+                printf("ALM INFO\n");
+                printf("\tpoints per blade = %ld\n", alm.ap_per_blade);
+                printf("\tprojection width = %lf\n", alm.projection_width);
+
+                printf("WINDTURBINE INFO\n");
+                for (Int i = 0; i < alm.wt_count; i ++) {
+                    auto &wt = alm.wt_lst[i];
+                    printf("\twt %ld\n", i);
+                    printf("\t\tblades = %ld\n", alm.blade_per_wt);
+                    printf("\t\tbase = (%lf %lf %lf)\n", wt.base[0], wt.base[1], wt.base[2]);
+                    printf("\t\trotation speed = %lf\n", wt.rot_speed);
+                    printf("\t\trotation center = (%lf %lf %lf)\n", wt.rot_center[0], wt.rot_center[1], wt.rot_center[2]);
+                    printf("\t\tangle type = %s\n", euler_angle_to_str(wt.angle_type).c_str());
+                    printf(
+                        "\t\tangle formula = %lf sin(%lf t + %lf) + %lf\n",
+                        wt.formula[0], wt.formula[1], wt.formula[2], wt.formula[3]
+                    );
+                }
+
+                printf("ACTUATOR POINT INFO\n");
+                std::string ap_info_path = output_dir/"ap_info.log";
+                FILE *ap_info_file = fopen(ap_info_path.c_str(), "w");
+                fprintf(ap_info_file, "ap count = %ld, atk acount = %ld\n", alm.ap_count, alm.atk_count);
+                for (Int i = 0; i < alm.ap_count; i ++) {
+                    fprintf(ap_info_file, "ap %ld\n", i);
+                    auto &ap = alm.ap_lst[i];
+                    fprintf(ap_info_file, "\tr = %lf\n", ap.r);
+                    fprintf(ap_info_file, "\tdr = %lf\n", ap.dr);
+                    fprintf(ap_info_file, "\tchord = %lf\n", ap.chord);
+                    fprintf(ap_info_file, "\ttwist = %lf\n", ap.twist);
+                    fprintf(ap_info_file, "\tcd = \n");
+                    for (Int j = 0; j < alm.atk_count; j ++) {
+                        fprintf(ap_info_file, "\t\t%lf\n", alm.cd_tbl[i][j]);
+                    }
+                    fprintf(ap_info_file, "\tcl = \n");
+                    for (Int j = 0; j < alm.atk_count; j ++) {
+                        fprintf(ap_info_file, "\t\t%lf\n", alm.cl_tbl[i][j]);
+                    }
+                }
+                fprintf(ap_info_file, "atk\n");
+                for (Int j = 0; j < alm.atk_count; j ++) {
+                    fprintf(ap_info_file, "\t%lf\n", alm.atk_lst[j]);
+                }
+                printf("\toutput to %s\n", ap_info_path.c_str());
+                fclose(ap_info_file);
             }
 
             json part_json;
@@ -991,6 +1132,15 @@ struct Solver {
             mesh.dx, mesh.dy, mesh.dz,
             size, gc,
             &mpi
+        );
+
+        run_alm(
+            cfd.U, cfd.f, alm.projection_width,
+            mesh.x, mesh.y, mesh.z,
+            alm.wt_lst, alm.wt_count,
+            alm.ap_lst, alm.ap_count, alm.blade_per_wt, alm.ap_per_blade,
+            alm.cd_tbl, alm.cl_tbl, alm.atk_lst, alm.atk_count,
+            rt.get_time(), size, gc, &mpi
         );
 
         // printf("8\n");

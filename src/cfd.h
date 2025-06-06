@@ -207,7 +207,7 @@ static void calc_intermediate_U_at_cell(
         JU[idc][2], JU[idb][2]
     };
 
-#pragma acc loop seq
+// #pragma acc loop seq
     for (Int m = 0; m < 3; m ++) {
         Real convection_stencil[] = {
             Uold[idc ][m],
@@ -1152,7 +1152,7 @@ copyin(size[:3])
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         Int id = index(i, j, k, size);
-#pragma acc loop seq
+// #pragma acc loop seq
         for (Int m = 0; m < 3; m ++) {
             U[id][m] = (1. - solid[id])*U[id][m];
         }
