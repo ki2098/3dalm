@@ -90,16 +90,16 @@ static Real get_intersection(Real h1, Real t1, Real h2, Real t2) {
 }
 
 template<typename T>
-Int find_nearest_index(T *arr, T value, Int len) {
-    if (value < arr[0]) {
+Int find_nearest_index(T *x, T y, Int len) {
+    if (y < x[0]) {
         return 0;
     }
-    if (value >= arr[len - 1]) {
+    if (y >= x[len - 1]) {
         return len - 1;
     }
     for (Int i = 0; i < len - 1; i ++) {
-        if (arr[i] <= value && value < arr[i + 1]) {
-            return (value - arr[i] < arr[i + 1] - value)? i : i + 1;
+        if (x[i] <= y && y < x[i + 1]) {
+            return (y - x[i] < x[i + 1] - y)? i : i + 1;
         }
     }
     return - 1;
@@ -107,19 +107,31 @@ Int find_nearest_index(T *arr, T value, Int len) {
 
 #pragma acc routine seq
 template<typename T>
-Int find_floor_index(T *arr, T value, Int len) {
-    if (value < arr[0]) {
+Int find_floor_index(T *x, T y, Int len) {
+    if (y < x[0]) {
         return - 1;
     }
-    if (value >= arr[len - 1]) {
+    if (y >= x[len - 1]) {
         return len - 1;
     }
-    for (Int i = 0; i < len - 1; i ++) {
-        if (arr[i] <= value && value < arr[i + 1]) {
-            return i;
+    Int low = 0;
+    Int high = len - 1;
+    Int find = -1;
+    while (low <= high) {
+        Int mid = low + (high - low)/2;
+        if (x[mid] <= y) {
+            find = mid;
+            low = mid + 1;
+        } else if (x[mid] > y) {
+            high = mid - 1;
         }
     }
-    return - 1;
+    // for (Int i = 0; i < len - 1; i ++) {
+    //     if (arr[i] <= value && value < arr[i + 1]) {
+    //         return i;
+    //     }
+    // }
+    return find;
 }
 
 #pragma acc routine seq

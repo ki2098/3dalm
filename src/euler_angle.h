@@ -61,7 +61,7 @@ static void frame_transform(Real xyz[3], Real xyz_[3], Real angle, EulerAngle ty
     }
 }
 
-static void frame_transform_dt(Real xyz[3], Real U[3], Real U_[3], Real angle, Real ow, EulerAngle type) {
+static void frame_transform_U(Real xyz[3], Real U[3], Real U_[3], Real angle, Real ow, EulerAngle type) {
     Real c = cos(angle);
     Real s = sin(angle);
     Real x = xyz[0];

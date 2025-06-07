@@ -174,7 +174,7 @@ static Real calc_diffusion(Real stencil[7], Real xyz[9], Real dxyz[3], Real visc
 
 #pragma acc routine seq
 static void calc_intermediate_U_at_cell(
-    Real U[][3], Real Uold[][3], Real JU[][3], Real nut[],
+    Real U[][3], Real Uold[][3], Real JU[][3], Real nut[], Real f[][3],
     Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
     Real Re, Real dt,
@@ -237,12 +237,12 @@ static void calc_intermediate_U_at_cell(
         };
         Real diffusion = calc_diffusion(diffusion_stencil, xyz, dxyz, viscosity);
 
-        U[idc][m] = Uold[idc][m] + dt*(- convection + diffusion);
+        U[idc][m] = Uold[idc][m] + dt*(- convection + diffusion + f[idc][m]);
     }
 }
 
 static void calc_intermediate_U(
-    Real U[][3], Real Uold[][3], Real JU[][3], Real nut[],
+    Real U[][3], Real Uold[][3], Real JU[][3], Real nut[], Real f[][3],
     Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
     Real Re, Real dt,
@@ -274,7 +274,7 @@ static void calc_intermediate_U(
     }
 
 #pragma acc kernels loop independent collapse(3) \
-present(U[:len], Uold[:len], JU[:len], nut[:len]) \
+present(U[:len], Uold[:len], JU[:len], nut[:len], f[:len]) \
 present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
@@ -282,7 +282,7 @@ copyin(size[:3])
     for (Int j = gc; j < size[1] - gc; j ++) {
     for (Int k = gc; k < size[2] - gc; k ++) {
         calc_intermediate_U_at_cell(
-            U, Uold, JU, nut,
+            U, Uold, JU, nut, f,
             x, y, z, dx, dy, dz,
             Re, dt,
             size, gc,
@@ -303,7 +303,7 @@ copyin(size[:3])
 
     /** for x- and x+ */
 #pragma acc kernels loop independent collapse(3) \
-present(U[:len], Uold[:len], JU[:len], nut[:len]) \
+present(U[:len], Uold[:len], JU[:len], nut[:len], f[:len]) \
 present(x[:size[0]], y[:size[1]], z[:size[2]]) \
 present(dx[:size[0]], dy[:size[1]], dz[:size[2]]) \
 copyin(size[:3])
@@ -313,7 +313,7 @@ copyin(size[:3])
         Int s = size[0] - 2*gc;
         Int i = (s - thick + I)%s + gc;
         calc_intermediate_U_at_cell(
-            U, Uold, JU, nut,
+            U, Uold, JU, nut, f,
             x, y, z, dx, dy, dz,
             Re, dt,
             size, gc,

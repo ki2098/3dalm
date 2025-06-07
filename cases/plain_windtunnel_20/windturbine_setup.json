@@ -8,15 +8,10 @@
             ],
             "angle": [
                 0,
-                {
-                    "amp": 3,
-                    "T": 18,
-                    "phase": 0,
-                    "offset": 0
-                },
+                0,
                 0
             ],
-            "rotation speed": 8
+            "rotation speed": 4
         },
         {
             "base": [
@@ -26,10 +21,10 @@
             ],
             "angle": [
                 0,
-                3,
+                0,
                 0
             ],
-            "rotation speed": 8
+            "rotation speed": 4
         }
     ],
     "alm": {

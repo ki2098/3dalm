@@ -458,30 +458,19 @@ struct Alm {
     Real projection_width;
 
     void intialize(
-        const std::string &wt_prop_path,
-        const std::string &wt_setup_path
+        const json &wt_prop_json,
+        const json &wt_array_json,
+        const json &alm_json
     ) {
-        std::ifstream wt_setup_file(wt_setup_path);
-        if (!wt_setup_file) {
-            return;
-        }
-
-        std::ifstream wt_prop_file(wt_prop_path);
-        auto &&wt_prop_json = nlohmann::json::parse(wt_prop_file);
-        auto &&wt_setup_json = nlohmann::json::parse(wt_setup_file);
-        auto &wt_array_json = wt_setup_json["windturbine array"];
-        auto &alm_setup_json = wt_setup_json["alm"];
-        wt_count = wt_array_json.size();
-        ap_per_blade = alm_setup_json["blade points"];
-        projection_width = alm_setup_json["projection width"];
+        ap_per_blade = alm_json["blade points"];
+        projection_width = alm_json["projection width"];
         blade_per_wt = wt_prop_json["number of blades"];
 
+        build_wt_props(wt_prop_json, wt_array_json, wt_lst, wt_count);
         build_ap_props(
             build_ap_props(wt_prop_json, wt_count, ap_per_blade),
             ap_lst, atk_lst, cd_tbl, cl_tbl, ap_count, atk_count
         );
-
-        build_wt_props(wt_prop_json, wt_array_json, wt_lst, wt_count);
 
 #pragma acc enter data \
 copyin(ap_lst[:ap_count], wt_lst[:wt_count], atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count])
@@ -678,7 +667,13 @@ struct Solver {
             }
         }
 
-        alm.intialize("windturbine_properties.json", "windturbine_setup.json");
+        auto it_wt_array_json = setup_json.find("windturbine array");
+        if (it_wt_array_json != setup_json.end()) {
+            auto &wt_array_json = *it_wt_array_json;
+            auto &alm_json = setup_json["alm"];
+            auto &&wt_prop_json = json::parse(std::ifstream("windturbine.json"));
+            alm.intialize(wt_prop_json, wt_array_json, alm_json);
+        }
 
         /* if (eq.method == "BiCG") {
             eq.max_diag = build_A_for_BiCG(
@@ -1009,7 +1004,7 @@ struct Solver {
         // printf("1\n");
 
         calc_intermediate_U(
-            cfd.U, cfd.Uold, cfd.JU, cfd.nut,
+            cfd.U, cfd.Uold, cfd.JU, cfd.nut, cfd.f,
             mesh.x, mesh.y, mesh.z,
             mesh.dx, mesh.dy, mesh.dz,
             cfd.Re, rt.dt,

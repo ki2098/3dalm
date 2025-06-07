@@ -311,7 +311,7 @@ copyin(size[:3])
             Real xp = ap.xyz[0], yp = ap.xyz[1], zp = ap.xyz[2];
 
             Real Uap[3];
-            
+
 #pragma acc loop independent
             for (Int m = 0; m < 3; m ++) {
                 Real u0 = U[id0][m];
@@ -334,7 +334,7 @@ copyin(size[:3])
                 ap.xyz[2] - wt.base[2]
             };
             Real Uap_[3];
-            frame_transform_dt(apxyz_, Uap, Uap_, wt.angle, wt.angle_dt, wt.angle_type);
+            frame_transform_U(apxyz_, Uap, Uap_, wt.angle, wt.angle_dt, wt.angle_type);
 
             Real ux_ = Uap_[0];
             Real ut_ = ap.r*wt.rot_speed + Uap_[1]*sin(ap.theta) - Uap_[2]*cos(ap.theta);
@@ -357,6 +357,7 @@ copyin(size[:3])
               - ft_*cos(ap.theta)
             };
             frame_transform(f_, ap.f, - wt.angle, wt.angle_type);
+            // printf("%ld %lf %lf %lf\n", apid, ap.f[0], ap.f[1], ap.f[2]);
             ap.torque = fabs(ft_)*ap.r;
             ap.thrust = fx_;
         } else {
