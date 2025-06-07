@@ -4,7 +4,7 @@
 #include <string>
 #include "type.h"
 
-enum class EulerAngle {Roll, Pitch, Yaw, Undefined};
+enum class EulerAngle {Roll, Pitch, Yaw, None};
 
 static std::string euler_angle_to_str(EulerAngle type) {
     switch (type) {
@@ -15,7 +15,7 @@ static std::string euler_angle_to_str(EulerAngle type) {
     case EulerAngle::Yaw:
         return "yaw"; 
     default:
-        return "undefined"; 
+        return "none"; 
     }
 }
 
@@ -27,7 +27,7 @@ static EulerAngle str_2_euler_angle(const std::string &str) {
     } else if (str == "yaw") {
         return EulerAngle::Yaw;
     } else {
-        return EulerAngle::Undefined;
+        return EulerAngle::None;
     }
 }
 

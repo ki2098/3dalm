@@ -473,20 +473,30 @@ struct Alm {
         );
 
 #pragma acc enter data \
-copyin(ap_lst[:ap_count], wt_lst[:wt_count], atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count])
+copyin(ap_lst[:ap_count], wt_lst[:wt_count]) \
+copyin(atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count])
     }
 
     ~Alm() {
         if (ap_count > 0) {
             delete[] ap_lst;
             delete[] atk_lst;
+            for (Int i = 0; i < ap_count; i ++) {
+                delete[] cd_tbl[i];
+                delete[] cl_tbl[i];
+#pragma acc exit data \
+delete(cd_tbl[i][:atk_count], cl_tbl[i][:atk_count])
+            }
             delete[] cd_tbl;
             delete[] cl_tbl;
+
 #pragma acc exit data \
-delete(ap_lst[:ap_count], atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count])
+delete(ap_lst[:ap_count]) \
+delete(atk_lst[:atk_count], cd_tbl[:ap_count], cl_tbl[:ap_count])
         }
         if (wt_count > 0) {
             delete[] wt_lst;
+
 #pragma acc exit data \
 delete(wt_lst[:wt_count])
         }
@@ -801,9 +811,9 @@ struct Solver {
 
         out_handler.set_size(size, gc);
         out_handler.set_var(
-            {cfd.U[0], cfd.p, cfd.div, cfd.q},
-            {3, 1, 1, 1},
-            {"U", "p", "div", "q"}
+            {cfd.U[0], cfd.p, cfd.div, cfd.q, cfd.f[0]},
+            {3, 1, 1, 1, 3},
+            {"U", "p", "div", "q", "f"}
         );
 
         tavg_out_handler.set_size(size, gc);
@@ -864,7 +874,7 @@ struct Solver {
                 printf("\tspacing = %lf\n", tgg_mesh);
                 printf("\tplacement = %lf\n", tgg_x);
             } else {
-                printf("\tno turbulence generating grid specified\n");
+                printf("\tno turbulence generating grid\n");
             }
 
             printf("CFD INFO\n");
@@ -935,6 +945,9 @@ struct Solver {
                 }
                 printf("\toutput to %s\n", ap_info_path.c_str());
                 fclose(ap_info_file);
+            } else {
+                printf("WINDTURBINE INFO\n");
+                printf("\tno windturbine\n");
             }
 
             json part_json;

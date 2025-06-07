@@ -25,7 +25,7 @@ struct WindTurbine {
     Real rot_center[3];
     EulerAngle angle_type;
     Real angle;
-    Real angle_dt;
+    Real ow;
     Real formula[4];
     Real rot_speed;
     Real torque;
@@ -183,7 +183,7 @@ static void build_wt_props(
                     wt.angle_type = EulerAngle::Yaw;
                     break;
                 default:
-                    wt.angle_type = EulerAngle::Undefined;
+                    wt.angle_type = EulerAngle::None;
                     break;
                 }
 
@@ -191,12 +191,12 @@ static void build_wt_props(
                     wt.formula[0] = 0;
                     wt.formula[1] = 0;
                     wt.formula[2] = 0;
-                    wt.formula[3] = degree_to_rad(a);
+                    wt.formula[3] = deg_to_rad(a);
                 } else if (a.is_object()) {
-                    wt.formula[0] = degree_to_rad(a["amp"]);
+                    wt.formula[0] = deg_to_rad(a["amp"]);
                     wt.formula[1] = 2*Pi/a["T"].get<Real>();
-                    wt.formula[2] = degree_to_rad(a["phase"]);
-                    wt.formula[3] = degree_to_rad(a["offset"]);
+                    wt.formula[2] = deg_to_rad(a["phase"]);
+                    wt.formula[3] = deg_to_rad(a["offset"]);
                 }
 
                 break;
@@ -231,8 +231,8 @@ static void lookup_cdcl_table(
 }
 
 static void update_ap_position(WindTurbine *wt_lst, Int wt_count, ActuatorPoint *ap_lst, Int ap_count, Int blade_per_wt, Int ap_per_blade, Real t) {
-#pragma acc kernels loop independent \
-present(wt_lst[:wt_count])
+// #pragma acc kernels loop independent \
+// present(wt_lst[:wt_count])
     for (Int wtid = 0; wtid < wt_count; wtid ++) {
         auto &wt = wt_lst[wtid];
         Real A = wt.formula[0];
@@ -240,8 +240,9 @@ present(wt_lst[:wt_count])
         Real C = wt.formula[2];
         Real D = wt.formula[3];
         wt.angle = A*sin(B*t + C) + D;
-        wt.angle_dt = A*B*cos(B*t + C);
+        wt.ow = A*B*cos(B*t + C);
     }
+#pragma acc update device(wt_lst[:wt_count])
 
     Int ap_per_wt = ap_per_blade*blade_per_wt;
 #pragma acc kernels loop independent \
@@ -328,19 +329,19 @@ copyin(size[:3])
                 );
             }
 
-            Real apxyz_[] = {
+            Real apxyz_rel[] = {
                 ap.xyz[0] - wt.base[0],
                 ap.xyz[1] - wt.base[1],
                 ap.xyz[2] - wt.base[2]
             };
             Real Uap_[3];
-            frame_transform_U(apxyz_, Uap, Uap_, wt.angle, wt.angle_dt, wt.angle_type);
+            frame_transform_U(apxyz_rel, Uap, Uap_, wt.angle, wt.ow, wt.angle_type);
 
             Real ux_ = Uap_[0];
             Real ut_ = ap.r*wt.rot_speed + Uap_[1]*sin(ap.theta) - Uap_[2]*cos(ap.theta);
             Real Urel2 = ux_*ux_ + ut_*ut_;
             Real phi = atan(ux_/ut_);
-            Real atk = phi - ap.twist;
+            Real atk = rad_to_deg(phi) - ap.twist;
             Real cd, cl;
             lookup_cdcl_table(
                 cd_tbl[apid], cl_tbl[apid], atk_lst, atk_count,
@@ -376,13 +377,14 @@ copyin(size[:3])
         }
     }
 
+#pragma acc update host(ap_lst[:ap_count])
     std::vector<MPI_Request> torque_req(wt_count), thrust_req(wt_count);
-#pragma acc kernels loop independent \
-present(wt_lst[:wt_count], ap_lst[:ap_count])
+// #pragma acc kernels loop independent \
+// present(wt_lst[:wt_count], ap_lst[:ap_count])
     for (Int wtid = 0; wtid < wt_count; wtid ++) {
         auto &wt = wt_lst[wtid];
         Real torque = 0, thrust = 0;
-#pragma acc loop seq
+// #pragma acc loop seq
         for (Int apid = wtid*ap_per_wt; apid < (wtid + 1)*ap_per_wt; apid ++) {
             torque += ap_lst[apid].torque;
             thrust += ap_lst[apid].thrust;
@@ -393,9 +395,9 @@ present(wt_lst[:wt_count], ap_lst[:ap_count])
 
     if (mpi->size > 1) {
         for (Int wtid = 0; wtid < wt_count; wtid ++) {
-#pragma acc host_data use_device(wt_lst)
+// #pragma acc host_data use_device(wt_lst)
             MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].torque, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &torque_req[wtid]);
-#pragma acc host_data use_device(wt_lst)
+// #pragma acc host_data use_device(wt_lst)
             MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].thrust, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &thrust_req[wtid]);
         }
     }
