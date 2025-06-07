@@ -479,26 +479,24 @@ copyin(atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:at
 
     ~Alm() {
         if (ap_count > 0) {
+#pragma acc exit data \
+delete(ap_lst[:ap_count]) \
+delete(atk_lst[:atk_count], cd_tbl[:ap_count][:atk_count], cl_tbl[:ap_count][:atk_count])
+
             delete[] ap_lst;
             delete[] atk_lst;
             for (Int i = 0; i < ap_count; i ++) {
                 delete[] cd_tbl[i];
                 delete[] cl_tbl[i];
-#pragma acc exit data \
-delete(cd_tbl[i][:atk_count], cl_tbl[i][:atk_count])
             }
             delete[] cd_tbl;
             delete[] cl_tbl;
-
-#pragma acc exit data \
-delete(ap_lst[:ap_count]) \
-delete(atk_lst[:atk_count], cd_tbl[:ap_count], cl_tbl[:ap_count])
         }
         if (wt_count > 0) {
-            delete[] wt_lst;
-
 #pragma acc exit data \
 delete(wt_lst[:wt_count])
+
+            delete[] wt_lst;
         }
     }
 };

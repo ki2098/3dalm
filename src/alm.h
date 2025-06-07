@@ -391,16 +391,20 @@ copyin(size[:3])
         }
         wt.torque = torque;
         wt.thrust = thrust;
-    }
-
-    if (mpi->size > 1) {
-        for (Int wtid = 0; wtid < wt_count; wtid ++) {
-// #pragma acc host_data use_device(wt_lst)
-            MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].torque, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &torque_req[wtid]);
-// #pragma acc host_data use_device(wt_lst)
-            MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].thrust, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &thrust_req[wtid]);
+        if (mpi->size > 1) {
+            MPI_Iallreduce(MPI_IN_PLACE, &wt.torque, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &torque_req[wtid]);
+            MPI_Iallreduce(MPI_IN_PLACE, &wt.thrust, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &thrust_req[wtid]);
         }
     }
+
+//     if (mpi->size > 1) {
+//         for (Int wtid = 0; wtid < wt_count; wtid ++) {
+// // #pragma acc host_data use_device(wt_lst)
+//             MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].torque, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &torque_req[wtid]);
+// // #pragma acc host_data use_device(wt_lst)
+//             MPI_Iallreduce(MPI_IN_PLACE, &wt_lst[wtid].thrust, 1, get_mpi_datatype<Real>(), MPI_SUM, MPI_COMM_WORLD, &thrust_req[wtid]);
+//         }
+//     }
 
     if (mpi->size > 1) {
         MPI_Waitall(ap_count, apreq.data(), MPI_STATUSES_IGNORE);
