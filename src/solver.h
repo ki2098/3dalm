@@ -679,7 +679,7 @@ struct Solver {
         if (it_wt_array_json != setup_json.end()) {
             auto &wt_array_json = *it_wt_array_json;
             auto &alm_json = setup_json["alm"];
-            auto &&wt_prop_json = json::parse(std::ifstream("windturbine.json"));
+            auto &&wt_prop_json = json::parse(std::ifstream(case_dir/"windturbine.json"));
             alm.intialize(wt_prop_json, wt_array_json, alm_json);
         }
 
