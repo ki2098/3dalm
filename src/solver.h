@@ -879,7 +879,7 @@ struct Solver {
             printf("\tRe = %lf\n", cfd.Re);
             printf("\tCs = %lf\n", cfd.Cs);
             printf("\tinitial div(U) = %e\n", cfd.avg_div);
-            printf("\tinitial max cfd = %e\n", cfd.max_cfl);
+            printf("\tinitial max cfl = %e\n", cfd.max_cfl);
 
             printf("EQ INFO\n");
             printf("\tmax iteration = %ld\n", eq.max_it);
