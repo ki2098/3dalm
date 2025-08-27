@@ -1,18 +1,12 @@
 {
     "runtime": {
         "dt": 1e-3,
-        "time": 30
+        "time": 10
     },
     "output": {
-        "output start time": 10,
+        "output start time": 0,
         "output interval time": 1,
         "time avg start time": 0
-    },
-    "turbulence grid":{
-        "bar":0.09,
-        "mesh":0.402,
-        "thick":0.06,
-        "x":0
     },
     "inflow": {
         "value": [
@@ -26,10 +20,33 @@
         "Cs": 0.1
     },
     "eq": {
-        "tolerance": 1e-4,
+        "tolerance": 1e-3,
         "max iteration": 1000,
-        "method": "SOR",
-        "relaxation rate":1.5
+        "method": "BiCG",
+        "preconditioner": {
+            "method": "SOR",
+            "max iteration": 5,
+            "relaxation rate": 1.1
+        }
+    },
+    "windturbine array": [
+        {
+            "base": [
+                0,
+                0,
+                0
+            ],
+            "angle": [
+                0,
+                0,
+                0
+            ],
+            "rotation speed": 4
+        }
+    ],
+    "alm": {
+        "blade points": 20,
+        "projection width": 0.05
     },
     "probe": [
         [
