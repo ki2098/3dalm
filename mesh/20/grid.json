@@ -1,6 +1,6 @@
 {
 	"Region": {
-		"Xmin": -10,
+		"Xmin": -15,
 		"Xmax": 20,
 		"Ymin": -3.6,
 		"Ymax": 3.6,
@@ -12,21 +12,12 @@
 		"Equal": [
 			{
 				"Label": "Equal_x_01",
-				"Begin": -10,
-				"End": 15,
-				"Division": 500
+				"Begin": -14,
+				"End": 16,
+				"Division": 600
 			}
 		],
-		"Stretch": [
-			{
-				"Label": "Stretch_y_02",
-				"Begin": 15,
-				"End": 20,
-				"Begin_width": 0.05,
-				"End_width": 0.1,
-				"Division":75
-			}
-		]
+		"Stretch": []
 	},
 	"y_axis": {
 		"SubRegion": 3,

@@ -107,52 +107,52 @@ copyin(size[:3])
         Real tgg_center_y = 0;
         Real tgg_center_z = 0;
 
-        // Real x_intersec_vertical = get_intersection(
-        //     xc - 0.5*dxc, xc + 0.5*dxc,
-        //     tgg_x - tgg_thick, tgg_x
-        // );
-        // Int bar_j_nearest = round((yc - tgg_center_y)/tgg_mesh);
-        // Real bar_y = bar_j_nearest*tgg_mesh + tgg_center_y;
-        // Real y_intersec = get_intersection(
-        //     yc - 0.5*dyc, yc + 0.5*dyc,
-        //     bar_y - 0.5*tgg_bar, bar_y + 0.5*tgg_bar
-        // );
-
-        // Real x_intersec_horizontal = get_intersection(
-        //     xc - 0.5*dxc, xc + 0.5*dxc,
-        //     tgg_x - 2*tgg_thick, tgg_x - tgg_thick
-        // );
-        
-        // Int bar_k_nearest = round((zc - tgg_center_z)/tgg_mesh);
-        // Real bar_z = bar_k_nearest*tgg_mesh + tgg_center_z;
-        // Real z_intersec = get_intersection(
-        //     zc - 0.5*dzc, zc + 0.5*dzc,
-        //     bar_z - 0.5*tgg_bar, bar_z + 0.5*tgg_bar
-        // );
-
-        // Real occupied = x_intersec_vertical*y_intersec*dzc + x_intersec_horizontal*z_intersec*dyc;
-
+        Real x_intersec_vertical = get_intersection(
+            xc - 0.5*dxc, xc + 0.5*dxc,
+            tgg_x - tgg_thick, tgg_x
+        );
         Int bar_j_nearest = round((yc - tgg_center_y)/tgg_mesh);
         Real bar_y = bar_j_nearest*tgg_mesh + tgg_center_y;
         Real y_intersec = get_intersection(
             yc - 0.5*dyc, yc + 0.5*dyc,
             bar_y - 0.5*tgg_bar, bar_y + 0.5*tgg_bar
         );
+
+        Real x_intersec_horizontal = get_intersection(
+            xc - 0.5*dxc, xc + 0.5*dxc,
+            tgg_x - 2*tgg_thick, tgg_x - tgg_thick
+        );
+        
         Int bar_k_nearest = round((zc - tgg_center_z)/tgg_mesh);
         Real bar_z = bar_k_nearest*tgg_mesh + tgg_center_z;
         Real z_intersec = get_intersection(
             zc - 0.5*dzc, zc + 0.5*dzc,
             bar_z - 0.5*tgg_bar, bar_z + 0.5*tgg_bar
         );
-        Real x_intersec = get_intersection(
-            xc - 0.5*dxc, xc + 0.5*dxc,
-            tgg_x - 0.5*tgg_thick, tgg_x + 0.5*tgg_thick
-        );
-        Real occupied = (
-            y_intersec*dzc
-        +   z_intersec*dyc
-        -   y_intersec*z_intersec
-        )*x_intersec;
+
+        Real occupied = x_intersec_vertical*y_intersec*dzc + x_intersec_horizontal*z_intersec*dyc;
+
+        // Int bar_j_nearest = round((yc - tgg_center_y)/tgg_mesh);
+        // Real bar_y = bar_j_nearest*tgg_mesh + tgg_center_y;
+        // Real y_intersec = get_intersection(
+        //     yc - 0.5*dyc, yc + 0.5*dyc,
+        //     bar_y - 0.5*tgg_bar, bar_y + 0.5*tgg_bar
+        // );
+        // Int bar_k_nearest = round((zc - tgg_center_z)/tgg_mesh);
+        // Real bar_z = bar_k_nearest*tgg_mesh + tgg_center_z;
+        // Real z_intersec = get_intersection(
+        //     zc - 0.5*dzc, zc + 0.5*dzc,
+        //     bar_z - 0.5*tgg_bar, bar_z + 0.5*tgg_bar
+        // );
+        // Real x_intersec = get_intersection(
+        //     xc - 0.5*dxc, xc + 0.5*dxc,
+        //     tgg_x - 0.5*tgg_thick, tgg_x + 0.5*tgg_thick
+        // );
+        // Real occupied = (
+        //     y_intersec*dzc
+        // +   z_intersec*dyc
+        // -   y_intersec*z_intersec
+        // )*x_intersec;
 
         solid[index(i, j, k, size)] = occupied/(dxc*dyc*dzc);
     }}}

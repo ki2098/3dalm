@@ -17,21 +17,41 @@ void load_mesh(
     Int size[3], Int &gc,
     Real *&x, Real *&y, Real *&z
 ) {
-    ifstream mesh_file(path);
-    mesh_file >> size[0] >> size[1] >> size[2] >> gc;
+    // ifstream mesh_file(path);
+    // mesh_file >> size[0] >> size[1] >> size[2] >> gc;
+    // x = new Real[size[0]];
+    // y = new Real[size[1]];
+    // z = new Real[size[2]];
+    // for (Int i = 0; i < size[0]; i ++) {
+    //     mesh_file >> x[i];
+    // }
+    // for (Int j = 0; j < size[1]; j ++) {
+    //     mesh_file >> y[j];
+    // }
+    // for (Int k = 0; k < size[2]; k ++) {
+    //     mesh_file >> z[k];
+    // }
+
+    auto mesh_json = json::parse(ifstream(path));
+    gc = mesh_json["guide cell"];
+    auto x_array = mesh_json["x"];
+    auto y_array = mesh_json["y"];
+    auto z_array = mesh_json["z"];
+    size[0] = x_array.size();
+    size[1] = y_array.size();
+    size[2] = z_array.size();
     x = new Real[size[0]];
     y = new Real[size[1]];
     z = new Real[size[2]];
     for (Int i = 0; i < size[0]; i ++) {
-        mesh_file >> x[i];
+        x[i] = x_array[i];
     }
     for (Int j = 0; j < size[1]; j ++) {
-        mesh_file >> y[j];
+        y[j] = y_array[j];
     }
     for (Int k = 0; k < size[2]; k ++) {
-        mesh_file >> z[k];
+        z[k] = z_array[k];
     }
-
 }
 
 void merge_rank_var(
@@ -92,7 +112,7 @@ void reconstruct(const fs::path &case_dir, bool tavg = false) {
     auto &var_name = out_handler.var_name;
 
     Real *gx, *gy, *gz;
-    load_mesh(case_dir/"mesh.txt", out_handler.size, out_handler.gc, gx, gy, gz);
+    load_mesh(case_dir/"mesh.json", out_handler.size, out_handler.gc, gx, gy, gz);
     auto gsize = out_handler.size;
     Int gc = out_handler.gc;
     Int glen = gsize[0]*gsize[1]*gsize[2];
