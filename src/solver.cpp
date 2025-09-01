@@ -1,9 +1,15 @@
+#include <ctime>
 #include "solver.h"
 
 using namespace std;
 
 int main(int argc, char *argv[]) {
+    auto time_start = time(0);
+    auto time_start_str = ctime(&time_start);
+    printf("START %s\n", time_start_str);
+
     Solver solver;
+
     solver.initialize(argc, argv);
 
     // OutHandler ohandler;
@@ -35,4 +41,8 @@ int main(int argc, char *argv[]) {
     // solver.snapshot_json.push_back(slice_json);
 
     solver.finalize();
+
+    auto time_end = time(0);
+    auto time_end_str = ctime(&time_end);
+    printf("END %s\n", time_start_str);
 }
