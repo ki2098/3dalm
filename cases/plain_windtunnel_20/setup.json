@@ -12,7 +12,7 @@
         "bar":0.18,
         "mesh":0.804,
         "thick":0.06,
-        "placement":[-10.6, 0.402, 0.238]
+        "placement":[-10.6, 0, 1.428]
     },
     "inflow": {
         "value": [

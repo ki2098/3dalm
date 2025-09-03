@@ -104,8 +104,8 @@ copyin(size[:3])
         //     y_intersection*z_intersection
         // )*x_intersection;
 
-        Real tgg_center_y = tgg_y;
-        Real tgg_center_z = tgg_z;
+        Real tgg_center_y = tgg_y + 0.5*tgg_mesh;
+        Real tgg_center_z = tgg_z + 0.5*tgg_mesh;
 
         Real x_intersec_vertical = get_intersection(
             xc - 0.5*dxc, xc + 0.5*dxc,
