@@ -5,7 +5,7 @@
 		"Ymin": -3.6,
 		"Ymax": 3.6,
 		"Zmin": 0,
-		"Zmax": 4
+		"Zmax": 3.5
 	},
 	"x_axis": {
 		"SubRegion": 2,
@@ -50,15 +50,15 @@
 				"End": 0.5,
 				"Begin_width": 0.01,
 				"End_width": 0.02,
-				"Division": 30
+				"Division": 36
 			},
 			{
 				"Label": "Stretch_z_02",
 				"Begin": 0.5,
-				"End": 4,
+				"End": 3.5,
 				"Begin_width": 0.02,
 				"End_width": 0.02,
-				"Division": 175
+				"Division": 150
 			}
 		]
 	}

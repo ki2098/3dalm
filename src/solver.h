@@ -53,7 +53,7 @@ static void set_turbulence_generating_grid(
     Real solid[],
     Real x[], Real y[], Real z[],
     Real dx[], Real dy[], Real dz[],
-    Real tgg_thick, Real tgg_mesh, Real tgg_bar, Real tgg_x,
+    Real tgg_thick, Real tgg_mesh, Real tgg_bar, Real tgg_x, Real tgg_y, Real tgg_z,
     Int size[3], Int gc
 ) {
     Int len = size[0]*size[1]*size[2];
@@ -104,8 +104,8 @@ copyin(size[:3])
         //     y_intersection*z_intersection
         // )*x_intersection;
 
-        Real tgg_center_y = 0.5*tgg_mesh;
-        Real tgg_center_z = 0;
+        Real tgg_center_y = tgg_y;
+        Real tgg_center_z = tgg_z;
 
         Real x_intersec_vertical = get_intersection(
             xc - 0.5*dxc, xc + 0.5*dxc,
@@ -581,7 +581,7 @@ struct Solver {
         rt.output_interval_step = output_interval_time/rt.dt;
         rt.tavg_start_step = tavg_start_time/rt.dt;
 
-        Real tbb_bar, tgg_thick, tgg_mesh, tgg_x;
+        Real tbb_bar, tgg_thick, tgg_mesh, tgg_x, tgg_y, tgg_z;
         auto it_tgg_json = setup_json.find("turbulence grid");
         bool there_is_tgg = (it_tgg_json != setup_json.end());
         if (there_is_tgg) {
@@ -589,7 +589,10 @@ struct Solver {
             tgg_thick = tgg_json["thick"];
             tgg_mesh = tgg_json["mesh"];
             tbb_bar = tgg_json["bar"];
-            tgg_x = tgg_json["x"];
+            auto tgg_plc = tgg_json["placement"];
+            tgg_x = tgg_plc[0];
+            tgg_y = tgg_plc[1];
+            tgg_z = tgg_plc[2];
         }
 
         auto mesh_path = case_dir/"mesh.json";
@@ -721,7 +724,7 @@ struct Solver {
                 cfd.solid,
                 mesh.x, mesh.y, mesh.z,
                 mesh.dx, mesh.dy, mesh.dz,
-                tgg_thick, tgg_mesh, tbb_bar, tgg_x,
+                tgg_thick, tgg_mesh, tbb_bar, tgg_x, tgg_y, tgg_z,
                 size, gc
             );
             OutHandler tgg_out_handler;
@@ -870,7 +873,7 @@ struct Solver {
             if (there_is_tgg) {
                 printf("\tthickness = %lf\n", tgg_thick);
                 printf("\tspacing = %lf\n", tgg_mesh);
-                printf("\tplacement = %lf\n", tgg_x);
+                printf("\tplacement = (%lf %lf %lf)\n", tgg_x, tgg_y, tgg_z);
             } else {
                 printf("\tno turbulence generating grid\n");
             }

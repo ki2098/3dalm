@@ -1,11 +1,11 @@
 {
 	"Region": {
-		"Xmin": -15,
-		"Xmax": 20,
+		"Xmin": -14,
+		"Xmax": 16,
 		"Ymin": -3.6,
 		"Ymax": 3.6,
 		"Zmin": 0,
-		"Zmax": 4
+		"Zmax": 3.5
 	},
 	"x_axis": {
 		"SubRegion": 2,
@@ -49,10 +49,10 @@
 			{
 				"Label": "Stretch_z_02",
 				"Begin": 0.5,
-				"End": 4,
+				"End": 3.5,
 				"Begin_width": 0.05,
 				"End_width": 0.05,
-				"Division": 70
+				"Division": 60
 			}
 		]
 	}
