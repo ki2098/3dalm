@@ -39,20 +39,45 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('case', help='case directory')
 parser.add_argument('id', nargs='*', help='probe id, if not given, plot all the monitors')
+parser.add_argument('-o', nargs='?', help='path of csv output, if not given, no csv output')
+parser.add_argument('-u', nargs=3, type=float, help='average 3d velocity, if not given, use time-averaged velocity from time series record')
 
 args = parser.parse_args()
 ids = args.id
 case_dir = args.case
+csv_path = args.o
+uavg = args.u
+
+if uavg is None:
+    print('U = tavg U')
+else:
+    print(f'U = {uavg}')
 
 if not ids:
     with open(f'{case_dir}/setup.json') as f:
         setup = json.load(f)
         ids = list(range(len(setup['probe'])))
 
+x = []
+y = []
+z = []
+I = []
+
 for id in ids:
     with open(f'{case_dir}/output/probe{id}.csv') as f:
         comment = f.readline()
         comment = comment[1:].strip()
+        coord = comment.split()
         df = pd.read_csv(f, comment='#')
-        I = get_tavg_I(df, [1,0,0])
-        print(f'probe=({comment}), I={I}')
+        ti = get_tavg_I(df, uavg)
+        print(f'probe=({comment}), I={ti}')
+        x.append(coord[0])
+        y.append(coord[1])
+        z.append(coord[2])
+        I.append(ti)
+
+if csv_path is not None:
+    df = pd.DataFrame({
+        "x":x, "y":y, "z":z, "I":I
+    })
+    df.to_csv(csv_path)
