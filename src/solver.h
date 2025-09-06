@@ -104,8 +104,8 @@ copyin(size[:3])
         //     y_intersection*z_intersection
         // )*x_intersection;
 
-        Real tgg_center_y = tgg_y + 0.5*tgg_mesh;
-        Real tgg_center_z = tgg_z + 0.5*tgg_mesh;
+        Real tgg_center_y = tgg_y;
+        Real tgg_center_z = tgg_z;
 
         Real x_intersec_vertical = get_intersection(
             xc - 0.5*dxc, xc + 0.5*dxc,
@@ -174,19 +174,29 @@ struct CharacScale {
 };
 
 struct Runtime {
-    Int step = 0, max_step;
+    Int step = 0;
+    Int max_step;
     Real dt;
-    Int output_start_step;
-    Int output_interval_step;
-    Int tavg_start_step;
+    // Int output_start_step;
+    // Int output_interval_step;
+    Int tavg_step_count = 0;
+
+    Real output_start_time;
+    Real output_interval_time;
+    Real tavg_start_time;
+    Real next_output_time;
 
     Real get_time() {
         return dt*step;
     }
 
-    void initialize(Int max_step, Real dt) {
-        this->max_step = max_step;
+    void initialize(Real max_time, Real dt, Real output_start_time, Real output_interval_time, Real tavg_start_time) {
+        this->max_step = max_time/dt;
         this->dt = dt;
+        this->output_start_time = output_start_time;
+        this->output_interval_time = output_interval_time;
+        this->next_output_time = output_start_time;
+        this->tavg_start_time = tavg_start_time;
 
         // printf("RUNTIME INFO\n");
         // printf("\tmax step = %ld\n", this->max_step);
@@ -550,9 +560,6 @@ struct Solver {
         MPI_Barrier(MPI_COMM_WORLD);
 
         auto &rt_json = setup_json["runtime"];
-        Real dt = rt_json["dt"];
-        Real total_time = rt_json["time"];
-        rt.initialize(total_time/dt, dt);
 
         auto &output_json = setup_json["output"];
         output_dir = case_dir/"output";
@@ -574,12 +581,15 @@ struct Solver {
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
+        Real dt = rt_json["dt"];
+        Real total_time = rt_json["time"];
         Real output_start_time = output_json["output start time"];
         Real output_interval_time = output_json["output interval time"];
         Real tavg_start_time = output_json["time avg start time"];
-        rt.output_start_step = output_start_time/rt.dt;
-        rt.output_interval_step = output_interval_time/rt.dt;
-        rt.tavg_start_step = tavg_start_time/rt.dt;
+        // rt.output_start_step = output_start_time/rt.dt;
+        // rt.output_interval_step = output_interval_time/rt.dt;
+        // rt.tavg_start_step = tavg_start_time/rt.dt;
+        rt.initialize(total_time, dt, output_start_time, output_interval_time, tavg_start_time);
 
         Real tbb_bar, tgg_thick, tgg_mesh, tgg_x, tgg_y, tgg_z;
         auto it_tgg_json = setup_json.find("turbulence grid");
@@ -671,8 +681,7 @@ struct Solver {
                     probes[m].initialize(
                         output_dir/("probe" + std::to_string(m) + ".csv"),
                         neari, nearj, neark,
-                        x[neari], y[nearj], z[neark],
-                        rt.output_interval_step
+                        x[neari], y[nearj], z[neark]
                     );
                 }
             }
@@ -855,9 +864,9 @@ struct Solver {
 
             printf("OUTPUT INFO\n");
             printf("\tdirectory = %s\n", output_dir.c_str());
-            printf("\toutput start step = %ld\n", rt.output_start_step);
-            printf("\toutput interval step = %ld\n", rt.output_interval_step);
-            printf("\ttime avg start step = %ld\n", rt.tavg_start_step);
+            printf("\toutput start time = %lf\n", rt.output_start_time);
+            printf("\toutput interval time = %lf\n", rt.output_interval_time);
+            printf("\ttime avg start time = %lf\n", rt.tavg_start_time);
             printf("\toutput vars =");
             for (auto &v : out_handler.var_name) {
                 printf(" %s", v.c_str());
@@ -1164,8 +1173,10 @@ struct Solver {
 
 SKIP_TIME_INTEGRAL:
         // printf("9\n");
-        if (rt.step >= rt.tavg_start_step) {
-            Real weight = 1./(rt.step - rt.tavg_start_step + 1);
+        const Real curr_time = rt.get_time();
+        if (curr_time >= rt.tavg_start_time) {
+            rt.tavg_step_count ++;
+            Real weight = 1./rt.tavg_step_count;
             calc_ax_plus_by(
                 1. - weight, cfd.Utavg,
                 weight, cfd.U,
@@ -1173,8 +1184,7 @@ SKIP_TIME_INTEGRAL:
                 len
             );
         }
-
-        if (rt.step >= rt.output_start_step) {
+        if (curr_time >= rt.output_start_time) {
             for (auto &m : probes) {
                 if (m.active) {
                     Int id = index(m.i, m.j, m.k, size);
@@ -1185,42 +1195,94 @@ SKIP_TIME_INTEGRAL:
                     );
                 }
             }
+        }
+        if (
+            curr_time-0.5*rt.dt <  rt.next_output_time 
+        &&  rt.next_output_time <= curr_time+0.5*rt.dt
+        ) {
+            rt.next_output_time += rt.output_interval_time;
+            calc_q(
+                cfd.U, cfd.q,
+                mesh.x, mesh.y, mesh.z,
+                size, gc,
+                &mpi
+            );
+            out_handler.update_host();
+            write_binary(
+                output_dir/make_rank_binary_filename("inst", mpi.rank, rt.step),
+                &out_handler,
+                mesh.x, mesh.y, mesh.z
+            );
+            json slice_json = {
+                {"step", rt.step},
+                {"time", rt.get_time()}
+            };
 
-            if ((rt.step - rt.output_start_step)%rt.output_interval_step == 0) {
-                calc_q(
-                    cfd.U, cfd.q,
-                    mesh.x, mesh.y, mesh.z,
-                    size, gc,
-                    &mpi
-                );
-                out_handler.update_host();
+            if (curr_time >= rt.tavg_start_time) {
+                tavg_out_handler.update_host();
                 write_binary(
-                    output_dir/make_rank_binary_filename("inst", mpi.rank, rt.step),
-                    &out_handler,
+                    output_dir/make_rank_binary_filename("tavg", mpi.rank, rt.step),
+                    &tavg_out_handler,
                     mesh.x, mesh.y, mesh.z
                 );
-                json slice_json = {
-                    {"step", rt.step},
-                    {"time", rt.get_time()}
-                };
-
-                if (rt.step >= rt.tavg_start_step) {
-                    tavg_out_handler.update_host();
-                    write_binary(
-                        output_dir/make_rank_binary_filename("tavg", mpi.rank, rt.step),
-                        &tavg_out_handler,
-                        mesh.x, mesh.y, mesh.z
-                    );
-                    slice_json["tavg"] = "yes";
-                }
+                slice_json["tavg"] = "yes";
+            }
                 
-                snapshot_json.push_back(slice_json);
-                if (mpi.rank == 0) {
-                    std::ofstream snapshot_output(output_dir/"snapshot.json");
-                    snapshot_output << std::setw(2) << snapshot_json;
-                }
+            snapshot_json.push_back(slice_json);
+            if (mpi.rank == 0) {
+                std::ofstream snapshot_output(output_dir/"snapshot.json");
+                snapshot_output << std::setw(2) << snapshot_json;
             }
         }
+
+
+//         if (rt.step >= rt.output_start_step) {
+//             for (auto &m : probes) {
+//                 if (m.active) {
+//                     Int id = index(m.i, m.j, m.k, size);
+// #pragma acc update host(cfd.U[id:1])
+//                     m.add_record(
+//                         rt.get_time(),
+//                         {(float)cfd.U[id][0], (float)cfd.U[id][1], (float)cfd.U[id][2]}
+//                     );
+//                 }
+//             }
+
+//             if ((rt.step - rt.output_start_step)%rt.output_interval_step == 0) {
+//                 calc_q(
+//                     cfd.U, cfd.q,
+//                     mesh.x, mesh.y, mesh.z,
+//                     size, gc,
+//                     &mpi
+//                 );
+//                 out_handler.update_host();
+//                 write_binary(
+//                     output_dir/make_rank_binary_filename("inst", mpi.rank, rt.step),
+//                     &out_handler,
+//                     mesh.x, mesh.y, mesh.z
+//                 );
+//                 json slice_json = {
+//                     {"step", rt.step},
+//                     {"time", rt.get_time()}
+//                 };
+
+//                 if (rt.step >= rt.tavg_start_step) {
+//                     tavg_out_handler.update_host();
+//                     write_binary(
+//                         output_dir/make_rank_binary_filename("tavg", mpi.rank, rt.step),
+//                         &tavg_out_handler,
+//                         mesh.x, mesh.y, mesh.z
+//                     );
+//                     slice_json["tavg"] = "yes";
+//                 }
+                
+//                 snapshot_json.push_back(slice_json);
+//                 if (mpi.rank == 0) {
+//                     std::ofstream snapshot_output(output_dir/"snapshot.json");
+//                     snapshot_output << std::setw(2) << snapshot_json;
+//                 }
+//             }
+//         }
 
         rt.step ++;
     }
