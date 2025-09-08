@@ -8,7 +8,8 @@ static void apply_Ubc(
     Real dx[], Real dy[], Real dz[],
     Real dt,
     Int size[3], Int gc,
-    MpiInfo *mpi
+    MpiInfo *mpi,
+    bool retracted_floor=false, Real floor_start_x=0
 ) {
     Int len = size[0]*size[1]*size[2];
 
@@ -152,6 +153,10 @@ copyin(size[:3])
         Real z3 = z[k3];
         Real z4 = z[k4];
         Real Ubc[] = {0, 0, 0};
+        if (retracted_floor && x[i] < floor_start_x) {
+            Ubc[0] = U[id1][0];
+            Ubc[1] = U[id1][1];
+        }
         for (Int m = 0; m < 3; m ++) {
             Real f0 = U[id0][m];
             Real f1 = U[id1][m];

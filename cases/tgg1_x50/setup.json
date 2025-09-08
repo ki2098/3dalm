@@ -14,6 +14,7 @@
         "thick":0.06,
         "placement":[-10.6, 0, 1.474]
     },
+    "floor start":-10,
     "inflow": {
         "value": [
             1,

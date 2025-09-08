@@ -1,20 +1,14 @@
 {
     "runtime": {
         "dt": 1e-3,
-        "time": 150
+        "time": 100
     },
     "output": {
-        "output start time": 50,
+        "output start time": 20,
         "output interval time": 20,
         "time avg start time": 30
     },
-    "turbulence grid":{
-        "bar":0.09,
-        "mesh":0.402,
-        "thick":0.06,
-        "placement":[-10.6, 0, 1.474]
-    },
-    "floor start":-10,
+    "floor start":-12,
     "inflow": {
         "value": [
             1,

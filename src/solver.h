@@ -292,12 +292,17 @@ struct Cfd {
     Real Re, Cs;
     Real avg_div, max_cfl;
 
-    void initialize(Real Uin[3], Real Re, Real Cs, Int size[3]) {
+    bool retracted_floor = false;
+    Real floor_start_x;
+
+    void initialize(Real Uin[3], Real Re, Real Cs, Int size[3], bool retracted_floor=false, Real floor_start_x=0) {
         this->Uin[0] = Uin[0];
         this->Uin[1] = Uin[1];
         this->Uin[2] = Uin[2];
         this->Re = Re;
         this->Cs = Cs;
+        this->retracted_floor = retracted_floor;
+        this->floor_start_x = floor_start_x;
 
         Int len = size[0]*size[1]*size[2];
         U = new Real[len][3]();
@@ -612,6 +617,13 @@ struct Solver {
 
         // printf("%d mesh OK\n", mpi.rank);
 
+        bool retracted_floor = false;
+        Real floor_start_x = 0;
+        if (setup_json.contains("floor start")) {
+            retracted_floor = true;
+            floor_start_x = setup_json["floor start"];
+        }
+
         auto &inflow_json = setup_json["inflow"];
         auto &cfd_json = setup_json["cfd"];
         Real Uin[3];
@@ -620,7 +632,7 @@ struct Solver {
         Uin[2] = inflow_json["value"][2];
         Real Re = cfd_json["Re"];
         Real Cs = cfd_json["Cs"];
-        cfd.initialize(Uin, Re, Cs, size);
+        cfd.initialize(Uin, Re, Cs, size, retracted_floor, floor_start_x);
 
         // printf("%d cfd OK\n", mpi.rank);
 
@@ -763,7 +775,8 @@ struct Solver {
             mesh.dx, mesh.dy, mesh.dz,
             rt.dt,
             size, gc,
-            &mpi
+            &mpi,
+            cfd.retracted_floor, cfd.floor_start_x
         );
 
         // printf("%d Ubc OK\n", mpi.rank);
@@ -892,6 +905,10 @@ struct Solver {
             printf("\tCs = %lf\n", cfd.Cs);
             printf("\tinitial div(U) = %e\n", cfd.avg_div);
             printf("\tinitial max cfl = %e\n", cfd.max_cfl);
+            if (retracted_floor) {
+                printf("\tretracted floor boundary applied\n");
+                printf("\tfloor boundary start from x = %lf\n", floor_start_x);
+            }
 
             printf("EQ INFO\n");
             printf("\tmax iteration = %ld\n", eq.max_it);
@@ -1124,7 +1141,8 @@ struct Solver {
             mesh.dx, mesh.dy, mesh.dz,
             rt.dt,
             size, gc,
-            &mpi
+            &mpi,
+            cfd.retracted_floor, cfd.floor_start_x
         );
 
         apply_JUbc(

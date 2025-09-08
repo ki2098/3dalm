@@ -45,12 +45,20 @@
 		"Equal": [],
 		"Stretch": [
 			{
-				"Label": "Stretch_z_02",
+				"Label": "Stretch_z_01",
 				"Begin": 0,
+				"End": 0.5,
+				"Begin_width": 0.01,
+				"End_width": 0.02,
+				"Division": 36
+			},
+			{
+				"Label": "Stretch_z_02",
+				"Begin": 0.5,
 				"End": 3.5,
 				"Begin_width": 0.02,
 				"End_width": 0.02,
-				"Division": 175
+				"Division": 150
 			}
 		]
 	}
