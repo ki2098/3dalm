@@ -3,7 +3,7 @@
 #PJM -L rscgrp=b-batch
 #PJM -L node=1
 #PJM --mpi proc=4
-#PJM -L elapse=24:00:00
+#PJM -L elapse=3:00:00
 #PJM -j
 #PJM -o run.log
 
